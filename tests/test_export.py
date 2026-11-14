@@ -14,9 +14,9 @@ def test_archive_export_preserves_units_gaps_and_unverified_provenance(tmp_path)
     today = startOfDay(1794626100)
     yesterday = startOfDay(today - 1)
     records = [
-        {"dateTime": yesterday + 36300, "outTemp": 68.0, "rain": 0.1, "windGust": 6.0},
-        {"dateTime": yesterday + 36600, "outTemp": 86.0, "rain": 0.2, "windGust": 10.0},
-        {"dateTime": today + 300, "outTemp": None, "rain": None, "windGust": None},
+        {"dateTime": yesterday + 36300, "outTemp": 68.0, "rain": 0.1, "windGust": 6.0, "radiation": 100.0},
+        {"dateTime": yesterday + 36600, "outTemp": 86.0, "rain": 0.2, "windGust": 10.0, "radiation": 300.0},
+        {"dateTime": today + 300, "outTemp": None, "rain": None, "windGust": None, "radiation": None},
     ]
     for record in records:
         record.update(usUnits=weewx.US, interval=5, outHumidity=40.0, windSpeed=3.0)
@@ -40,6 +40,7 @@ def test_archive_export_preserves_units_gaps_and_unverified_provenance(tmp_path)
     assert day["temperature_min_c"] == pytest.approx(20.0)
     assert day["temperature_max_c"] == pytest.approx(30.0)
     assert day["rain_mm"] == pytest.approx(7.62)
+    assert day["solar_w_m2"] == pytest.approx(200.0)
     assert day["wind_gust_m_s"] == pytest.approx(4.4704)
     assert any(row["temperature_c"] is None and row["rain_mm"] is None for row in history["hourly"])
 

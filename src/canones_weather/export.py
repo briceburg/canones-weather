@@ -54,6 +54,7 @@ def history_rows(manager, start, stop, interval):
         ("wind_speed_m_s", "windSpeed", "avg", "meter_per_second"),
         ("wind_gust_m_s", "windGust", "max", "meter_per_second"),
         ("rain_mm", "rain", "sum", "mm"),
+        ("solar_w_m2", "radiation", "avg", "watt_per_meter_squared"),
     ]
     if not recent:
         fields += [

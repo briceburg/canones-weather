@@ -46,6 +46,7 @@ Each row has `at` and these fields:
 | `wind_speed_m_s` | Mean speed |
 | `wind_gust_m_s` | Maximum observed gust |
 | `rain_mm` | Interval total |
+| `solar_w_m2` | Mean light-derived solar irradiance, including nighttime; optional on older feeds |
 | `temperature_min_c`, `temperature_max_c` | Interval extrema; optional for older feeds |
 
 Recent timestamps identify five-minute interval ends, matching the archive and
@@ -90,3 +91,26 @@ identity; replacing both JSON files starts the public history for that dataset
 without changing its URLs. The browser discards history whose identity differs
 from the current observation. Retain the pilot archive and a consistent backup
 rather than deleting or relabeling its measurements as verified.
+
+## Seasonal comparisons
+
+The Seasons view groups daily rows by meteorological season in America/Denver:
+spring March–May, summer June–August, autumn September–November, and winter
+December–February. Winter is labeled with both years. Monsoon compares June 15
+through September 30 each year, following [NWS Albuquerque's designated window](https://www.weather.gov/abq/prepawaremonsoonhome). Actual monsoon onset varies.
+
+These views average available daily means, preserve recorded temperature extrema
+and peak gusts, and sum recorded rainfall. Tooltips report days with values for
+the selected measurement against calendar days in the full window. A day with a
+value can itself be incomplete; this is not a measure of archive uptime. Missing
+values stay missing, and partial-season totals are never extrapolated. These are
+observations from this station's dataset, not regional climate normals.
+
+Spring wind comparisons use mean daily wind speed and maximum recorded gust.
+Monsoon defaults to rainfall; other measurements remain selectable. All values
+are derived in the browser from existing daily JSON, with no additional feeds.
+
+Solar comparisons use the WS90 light-derived irradiance estimate in W/m², including
+nighttime readings. The WS90 measures light and UV, not cloud-cover percentage.
+Clouds, smoke, shading, sun angle, and day length affect the signal. No cloudiness
+percentage or sunshine duration is inferred from it. See [Ecowitt's sensor specifications](https://shop.ecowitt.com/collections/wifi-sensor/products/ws90).
