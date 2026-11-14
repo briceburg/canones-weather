@@ -323,6 +323,27 @@ p {
 .station-header p {
   margin: 0;
 }
+.station-identity {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.station-header .station-clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+.station-time-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.station-clock time {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
 .mode-controls {
   display: flex;
   flex-direction: column;
@@ -337,7 +358,8 @@ p {
   gap: 3px;
   max-width: 100%;
 }
-.segments button {
+.segments button,
+.segments .custom-period {
   border: 0;
   background: none;
   color: var(--muted);
@@ -346,7 +368,8 @@ p {
   border-radius: 5px;
   white-space: nowrap;
 }
-.segments button[aria-pressed="true"] {
+.segments button[aria-pressed="true"],
+.segments .custom-period {
   background: #30413f;
   color: var(--text);
 }
@@ -819,3 +842,17 @@ p {
 
 .control-picker input[data-control="daymet"] { accent-color: #b8a3cf; }
 .control-picker input[data-control="abiquiu"] { accent-color: #86b4cb; }
+
+.chart { cursor: crosshair; }
+.timeline-help { color: #a1b0ab; margin: 8px 0; }
+
+.reference-summary { margin: 10px 0; color: var(--muted); }
+#reference-controls { scroll-margin-top: 24px; }
+
+.reference-sources {
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 10px 0 0;
+  padding: 6px 0 0;
+}

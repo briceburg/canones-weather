@@ -102,10 +102,16 @@
           </p>
         </aside>
         <section class="station-header" aria-labelledby="station-title">
-          <div>
+          <div class="station-identity">
             <p class="eyebrow">Cañones · New Mexico</p>
             <h1 id="station-title">Secco Creek</h1>
-            <p class="muted small">A little weather, a longer perspective.</p>
+            <p class="station-clock muted">
+              <span class="station-time-group">
+                <span class="small">Station time:</span>
+                <time id="station-clock" title="Current time in Cañones"></time>
+              </span>
+              <span class="station-tagline small">A little weather, a longer perspective.</span>
+            </p>
           </div>
           <div class="mode-controls">
             <span class="tag sample" id="status">Sample data</span>
@@ -210,17 +216,18 @@
             <div class="segments" aria-label="History period">
               <button type="button" data-period="day" aria-pressed="true">
                 24h</button
-              ><button type="button" data-period="week" aria-pressed="false">
-                7d</button
               ><button type="button" data-period="month" aria-pressed="false">
                 30d</button
               ><button type="button" data-period="year" aria-pressed="false">
                 1y</button
+              ><button type="button" data-period="three-years" aria-pressed="false">
+                3y</button
               ><button type="button" data-period="all" aria-pressed="false">
                 All
               </button>
               <button type="button" data-period="seasons" aria-pressed="false">Seasons</button>
               <button type="button" data-period="monsoon" aria-pressed="false">Monsoon</button>
+              <span id="custom-period" class="custom-period" role="status" hidden>Custom</span>
             </div>
           </div>
           <div class="chart-toolbar">
@@ -252,21 +259,30 @@
               </button>
             </div>
           </div>
-          <fieldset class="control-picker">
-            <legend>Compare historical controls</legend>
-            <label><input type="checkbox" data-control="daymet" /> Daymet · Cañones grid estimate</label>
-            <label><input type="checkbox" data-control="abiquiu" /> Abiquiu Dam · NOAA observations</label>
-            <p id="control-note" class="small" aria-live="polite">Controls compare daily temperature ranges and precipitation. Each source stays separate.</p>
-            <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
-          </fieldset>
+          <p class="small reference-summary">
+            <a id="reference-summary" href="#reference-controls">Reference history settings ↓</a>
+          </p>
           <div
             id="chart"
             class="chart"
             role="img"
             aria-label="Weather history chart. Loading sample data."
           ></div>
+          <fieldset class="control-picker" id="reference-controls" tabindex="-1">
+            <legend>Chart sources</legend>
+            <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
+            <fieldset class="reference-sources">
+              <legend>Reference history</legend>
+              <label><input type="checkbox" data-control="daymet" checked /> <span>Daymet <span class="muted">— reference · modeled at Cañones</span></span></label>
+              <label><input type="checkbox" data-control="abiquiu" /> <span>Abiquiu Dam <span class="muted">— reference · NOAA observations</span></span></label>
+              <p class="small">Independent sources for comparison; station gaps remain unfilled.</p>
+            </fieldset>
+            <p id="control-note" class="small" aria-live="polite">Controls compare daily temperature ranges and precipitation. Each source stays separate.</p>
+            <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
+          </fieldset>
           <p class="chart-description" id="chart-description"></p>
           <a id="monsoon-source" class="small" href="https://www.weather.gov/abq/prepawaremonsoonhome" hidden>NWS monsoon season: June 15–September 30 ↗</a>
+          <p class="small timeline-help">Drag across the chart to zoom · move the timeline window to pan · select a period to reset</p>
           <p class="history-foot">
             <span id="history-range">—</span
             ><span id="history-resolution">—</span>

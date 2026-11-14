@@ -28,8 +28,8 @@ node --input-type=module --check < site/shared/assets/dashboard.js
 ```
 
 Use the same command with the path of any other JavaScript file you change.
-Run the focused seasonal calculation checks with
-`node --test tests/test_seasons.mjs`.
+Run the focused chart calculation checks with
+`node --test tests/test_*.mjs`.
 Keep sample data clearly labeled and check layouts on mobile and desktop.
 
 ## Infrastructure

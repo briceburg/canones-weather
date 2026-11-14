@@ -3,7 +3,7 @@
 Historical controls provide context for Secco Creek; they do not backfill its
 archive or establish past conditions at the property. Select either or both in
 the dashboard to compare daily temperature ranges and precipitation
-in 1y, All, Seasons, or Monsoon. Selecting a control from a short-period view
+in 30d, 1y, 3y, All, Seasons, or Monsoon. Selecting a control from a short-period view
 opens All. Current conditions always remain the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
@@ -82,7 +82,8 @@ software license does not replace provider data terms.
 uv run python -m canones_weather.reference \
   --latitude 36.150028 --longitude=-106.445500 \
   --start-year 2016 --output tmp/reference
-# To publish, add --publish-config tmp/publisher.json and provide bucket-scoped credentials.
+# To publish, use uv run --group station, add --publish-config tmp/publisher.json,
+# and provide bucket-scoped credentials.
 ```
 
 Controls are generated outside Git and served from the configured R2 reference
