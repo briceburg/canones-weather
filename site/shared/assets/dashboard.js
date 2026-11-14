@@ -22,16 +22,12 @@ const clockFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Denver",
   hour: "numeric", hour12: true, minute: "2-digit", second: "2-digit", timeZoneName: "short",
 });
-const clockDateFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Denver", weekday: "long", month: "long", day: "numeric",
-});
 function renderClock() {
   const now = new Date();
   $("station-clock").dateTime = now.toISOString();
   $("station-clock").textContent = clockFormat.formatToParts(now)
     .map(({type, value}) => type === "dayPeriod" ? value.toLowerCase() : value)
     .join("");
-  $("station-date").textContent = clockDateFormat.format(now);
 }
 renderClock();
 setInterval(renderClock, 1000);

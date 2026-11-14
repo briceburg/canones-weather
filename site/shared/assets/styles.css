@@ -334,6 +334,12 @@ p {
   align-items: baseline;
   gap: 4px 14px;
 }
+.station-time-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
 .station-clock time {
   font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
