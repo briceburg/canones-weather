@@ -57,8 +57,10 @@ remain eligible for compression.
 
 ## Historical controls
 
-In Live mode, select Daymet or Abiquiu Dam to overlay separately attributed daily
-controls. These bundled reference files do not change local observations or the
-station archive. See [reference data](../docs/reference-data.md) for refresh and
+Select Daymet or Abiquiu Dam to overlay separately attributed daily controls
+in either Sample or Live mode. Sample station series and their start marker are
+explicitly labeled as illustrative; controls retain their real provenance.
+These bundled reference files do not change local observations or the station
+archive. See [reference data](../docs/reference-data.md) for refresh and
 comparison details, and [publishing/discovery](../docs/publishing.md) for the
 production sitemap, Dataset metadata, and CWOP commissioning requirements.

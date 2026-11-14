@@ -2,10 +2,12 @@
 
 Historical controls provide context for Secco Creek; they do not backfill its
 archive or establish past conditions at the property. Select either or both in
-the dashboard's Live mode to compare daily temperature ranges and precipitation
+the dashboard to compare daily temperature ranges and precipitation
 in 1y, All, Seasons, or Monsoon. Selecting a control from a short-period view
 opens All. Current conditions always remain the local station's observations.
-Sample mode disables real controls to keep synthetic and measured data separate.
+Sample mode can overlay the same real controls against an explicitly labeled
+synthetic station series. Its archive-start marker is illustrative, not a station
+commissioning date.
 
 | Control | What it represents | Elevation |
 | --- | --- | --- |

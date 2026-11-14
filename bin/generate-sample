@@ -115,6 +115,7 @@ def main():
         "kind": "sample",
         "station_id": "canones",
         "through": iso(stop),
+        "record_started_at": iso(datetime.combine(START, time(), ZONE).timestamp() + 300),
         "recent": recent,
         "hourly": hourly,
         "daily": daily,

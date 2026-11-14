@@ -21,7 +21,7 @@ the years—with a public dashboard and reusable data.
 <details>
 <summary>See the station dashboard · sample data</summary>
 
-![Secco Creek dashboard showing sample conditions, an interactive temperature chart, and station details.](docs/assets/dashboard-preview.png)
+![Secco Creek dashboard showing illustrative station observations overlaid with attributed Daymet and NOAA reference data.](docs/assets/dashboard-preview.png)
 
 </details>
 
