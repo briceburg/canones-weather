@@ -3,8 +3,9 @@
 Historical controls provide context for Secco Creek; they do not backfill its
 archive or establish past conditions at the property. Select either or both in
 the dashboard to compare daily temperature ranges and precipitation
-in 30d, 1y, 3y, All, Seasons, or Monsoon. Selecting a control from a short-period view
-opens All. Current conditions always remain the local station's observations.
+in 30d, 1y, 3y, All, Seasons, or Monsoon. Unsupported views preserve source
+selections without changing the period or measurement. Current conditions always
+remain the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
 commissioning date.
@@ -41,7 +42,7 @@ coverage counts. Seasonal and monsoon values are calculated separately for each
 source; missing days are never counted as dry or extrapolated into a complete
 season. Totals from different observation windows need not be directly comparable.
 
-The two references have distinct colors and source-specific legends/tooltips.
+Chart legends and tooltips identify each reference source.
 Time-series overlays mark the local archive's `record_started_at`, identifying
 pilot collection separately from verified production. Seasonal categories show
 source-specific day counts instead of implying a precise date on a seasonal bar.

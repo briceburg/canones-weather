@@ -1,10 +1,7 @@
 """Export WeeWX archive observations and summaries to the dashboard JSON format."""
 
-import json
 import logging
 import math
-import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +10,8 @@ import weewx.engine
 import weewx.units
 import weewx.xtypes
 from weeutil.weeutil import TimeSpan, archiveDaySpan, intervalgen, startOfDay
+
+from canones_weather.jsonio import write_json
 
 log = logging.getLogger(__name__)
 
@@ -23,21 +22,6 @@ def iso(timestamp):
 
 def number(value):
     return round(float(value), 4) if value is not None and math.isfinite(float(value)) else None
-
-
-def write_json(path, data):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
-            temporary = stream.name
-            json.dump(data, stream, allow_nan=False, separators=(",", ":"))
-            stream.write("\n")
-        os.replace(temporary, path)
-    finally:
-        if temporary and os.path.exists(temporary):
-            os.unlink(temporary)
 
 
 def history_rows(manager, start, stop, interval):

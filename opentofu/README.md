@@ -4,12 +4,6 @@ The environment roots and shared `modules/weather-hosting` module own
 Cloudflare Pages sites, weather DNS, and R2 observation storage. AWS state
 buckets are managed separately by `iceburg-infra`.
 
-| Purpose | Production location |
-| --- | --- |
-| Hub | https://weather.iceburg.net |
-| Station | https://canones.weather.iceburg.net |
-| JSON | https://data.weather.iceburg.net/canones/current.json |
-
 ```text
 opentofu/
 ├── modules/weather-hosting/  # Pages, DNS, and R2 resources
@@ -35,8 +29,7 @@ Use the default workspace; each environment has separate state.
 | Git branch | `main` | `notprod` |
 
 Use the `notprod` Git branch for test deployments, with fixtures or replayed data
-and separate
-bucket-scoped publisher credentials. Do not configure weather-network uploads
+and separate bucket-scoped publisher credentials. Do not configure weather-network uploads
 from it. Both roots use the same hosting behavior, including protected buckets;
 review any deliberate teardown separately. For reuse, edit a root's public
 settings and provide your own backend configuration.

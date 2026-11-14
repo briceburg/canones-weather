@@ -77,20 +77,13 @@ timestamps, including files read across a local export. Browser requests may
 still straddle two uploads; a notice identifies different update times. The browser refresh interval is five minutes;
 current and history endpoints can fail independently.
 
-Site configuration is in `site/shared/assets/site-config.json`. It selects data
-hosts from the deployed hostname, keeping notprod separate from prod. Local
-previews on localhost or loopback addresses can select the public production feed;
-sample mode remains the default. A Pi snapshot overrides that selection with its
-local capture. `default_mode` selects `sample` or `live`; live mode requires valid observation
-and history feeds. The production hostname selects live mode; local previews select samples.
-Live mode rejects sample envelopes and never
-silently falls back to sample data. An observation older than 15 minutes is labeled
+[Site configuration](../site/README.md) selects feeds by hostname and supports
+sample/live modes plus local Pi snapshots. Production defaults to live data;
+local previews default to samples. Current and history feeds must match the
+selected mode. Live mode rejects sample envelopes and never silently substitutes
+sample data. An observation older than 15 minutes is labeled
 last-known data. Future timestamps are flagged. If a refresh fails, the previous
 observation retains its original timestamp.
-
-The synthetic sample is fixed at August 15, 2026. Regenerate it with
-`bin/generate-sample`; it includes five-minute, hourly, daily, solar, and seasonal
-data, with deliberate gaps and an ongoing monsoon.
 
 ## Dataset boundaries
 
@@ -115,8 +108,8 @@ values stay missing, and partial-season totals are never extrapolated. These are
 observations from this station's dataset, not regional climate normals.
 
 Spring wind comparisons use mean daily wind speed and maximum recorded gust.
-Monsoon defaults to rainfall; other measurements remain selectable. All values
-are derived in the browser from existing daily JSON, with no additional feeds.
+Monsoon defaults to rainfall; other measurements remain selectable. Station
+summaries use its daily JSON; reference sources are aggregated separately.
 
 Solar comparisons use the WS90 light-derived irradiance estimate in W/m², including
 nighttime readings. The WS90 measures light and UV, not cloud-cover percentage.
@@ -125,20 +118,9 @@ percentage or sunshine duration is inferred from it. See [Ecowitt's sensor speci
 
 ## Historical controls
 
-Separately attributed daily reference files live under `data/reference/` in the
-static station site. See [reference data](reference-data.md) for provenance, units,
-quality flags, calendars, coverage, refresh commands, and overlay semantics. They
-never enter the local archive or the current/history publisher.
-
-For weather-network registration and web indexing, see [publishing and discovery](publishing.md).
-
-## Timeline navigation
-
-The 30d, 1y, and 3y buttons preset the latest 30, 365, or 1,095 days over the
-full available daily history; older records remain available by panning. All resets to the full
-record. Click and drag horizontally across the chart to zoom into a period. Move the
-slider window to pan, drag its handles to resize, or use Ctrl + scroll to zoom.
-The chart follows the latest data until the user changes
-the window. A dragged time window retains its dates through unit/measurement
-changes and refreshes; a period or data-mode button resets the preset. The footer
-labels available history, which can extend beyond the visible window.
+Separately attributed reference files are served from the configured R2 reference
+feed, independently of the station's current/history pair and website builds.
+They never enter the local archive or weather-network submissions. See
+[reference data](reference-data.md) for source methods, coverage, and refreshes;
+[chart navigation](../site/README.md#charts) for periods and zoom behavior; and
+[publishing and discovery](publishing.md) for network registration and web indexing.

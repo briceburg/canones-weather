@@ -77,18 +77,21 @@ PY
   deploy) playbook=playbook.yml; : "${WEATHER_ELEVATION_M:?Set WEATHER_ELEVATION_M}" ;;
   *) printf 'Usage: bin/pi {preflight|deploy|publish|status|snapshot|backup} [ansible-playbook options]\n' >&2; exit 2 ;;
 esac
-: "${WEATHER_GATEWAY_URL:?Set WEATHER_GATEWAY_URL}"
+if [[ "$action" != publish ]]; then
+  : "${WEATHER_GATEWAY_URL:?Set WEATHER_GATEWAY_URL}"
+fi
 variables=$(mktemp "$PWD/tmp/pi-vars.XXXXXX.json")
 trap 'rm -f -- "$variables"' EXIT
 python3 - "$variables" "$action" <<'PY'
 import json, os, sys
 from pathlib import Path
-values = {
-    'weather_gateway': os.environ['WEATHER_GATEWAY_URL'],
-    'weather_elevation_m': os.environ.get('WEATHER_ELEVATION_M', ''),
-}
-if sys.argv[2] == 'publish':
-    values['weather_publisher'] = json.loads(Path('tmp/publisher.json').read_text())
+action = sys.argv[2]
+if action == 'publish':
+    values = {'weather_publisher': json.loads(Path('tmp/publisher.json').read_text())}
+else:
+    values = {'weather_gateway': os.environ['WEATHER_GATEWAY_URL']}
+    if action == 'deploy':
+        values['weather_elevation_m'] = os.environ['WEATHER_ELEVATION_M']
 Path(sys.argv[1]).write_text(json.dumps(values))
 PY
 printf -v ssh_args '%q ' "${ssh_options[@]}"
