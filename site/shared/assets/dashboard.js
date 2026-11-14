@@ -28,7 +28,8 @@ const state = {
   history: null,
   loading: false,
   viewport: null,
-  controls: new Set(),
+  controls: new Set(["daymet"]),
+  showReferences: true,
   references: {},
   referenceCheckedAt: {},
   controlErrors: new Set(),
@@ -300,17 +301,35 @@ function renderChart() {
   $("history-resolution").textContent =
     seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
   const eligible = (daily || seasonal) && ["temperature", "rain"].includes(state.metric);
-  const selectedReferences = [...state.controls].map((key) => state.references[key]).filter(Boolean);
-  const comparisons = eligible ? selectedReferences.map((data) => ({
+  const windowStart = state.viewport?.from ?? (end - days * 86400000);
+  const windowEnd = state.viewport?.to ?? end;
+  const stationInWindow = rows.some((row) => numeric(row[field]) &&
+    (seasonal || (Date.parse(row.at) >= windowStart && Date.parse(row.at) <= windowEnd)));
+  const showReferences = eligible && state.showReferences;
+  for (const input of document.querySelectorAll("[data-control]"))
+    input.disabled = !state.showReferences;
+  if (showReferences)
+    for (const key of state.controls)
+      if (!state.referenceCheckedAt[key]) loadReference(key);
+  const selectedReferences = showReferences
+    ? [...state.controls].map((key) => state.references[key]).filter(Boolean) : [];
+  const comparisons = selectedReferences.map((data) => ({
     source: data.source,
     rows: selectRows(data),
-  })) : [];
-  $("control-note").textContent = [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
+  }));
+  $("control-note").textContent = !state.showReferences ? "Reference history is hidden. Your source selections are preserved."
+    : [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
     : !eligible ? "Controls compare daily temperature ranges and precipitation in 30d, 1y, 3y, All, Seasons, or Monsoon."
     : state.controls.size > selectedReferences.length ? "Loading historical controls…"
     : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
       " Separate reference records; neither establishes past conditions at Secco Creek."
     : "Choose a control to overlay daily temperature ranges or precipitation; station observations remain separate.";
+  if (showReferences && state.controls.size) {
+    $("history-subtitle").textContent = stationInWindow
+      ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
+      : "Reference history only · no station observations in this window · Mountain Time";
+    $("control-note").textContent += " Reference coverage may end before the selected window; missing days are not filled.";
+  }
   if (seasonal && comparisons.length) {
     const periods = new Map([...rows, ...comparisons.flatMap((item) => item.rows)].map((row) => [row.start, row]));
     const templates = [...periods.values()].sort((a, b) => a.start - b.start);
@@ -328,7 +347,10 @@ function renderChart() {
   const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
   const stationHasData = rows.some((row) => numeric(row[field]));
   const referenceHasData = comparisons.some((item) => item.rows.some((row) => referenceFields.some((key) => numeric(row[key]))));
-  if (comparisons.length && !referenceHasData)
+  const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
+    (seasonal || (Date.parse(row.at) >= windowStart && Date.parse(row.at) <= windowEnd)) &&
+    referenceFields.some((key) => numeric(row[key]))));
+  if (comparisons.length && !referenceInWindow)
     $("control-note").textContent += " No selected control values overlap this window.";
   if (!stationHasData && !referenceHasData) {
     timelineDomain = null;
@@ -640,6 +662,11 @@ async function loadReference(key) {
   }
   renderChart();
 }
+$("show-reference-history").addEventListener("change", (event) => {
+  state.showReferences = event.target.checked;
+  if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
+  renderChart();
+});
 for (const input of document.querySelectorAll("[data-control]")) {
   input.addEventListener("change", async () => {
     const key = input.dataset.control;
@@ -670,7 +697,7 @@ new ResizeObserver(() => chart.resize()).observe($("chart"));
 setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
-  for (const key of state.controls)
+  for (const key of state.showReferences ? state.controls : [])
     if (Date.now() - state.referenceCheckedAt[key] >= 3600000) loadReference(key);
 }, 300000);
 await load();

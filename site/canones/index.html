@@ -254,8 +254,10 @@
             </div>
           </div>
           <fieldset class="control-picker">
-            <legend>Compare historical controls</legend>
-            <label><input type="checkbox" data-control="daymet" /> Daymet · Cañones grid estimate</label>
+            <legend>Reference history</legend>
+            <label><input type="checkbox" id="show-reference-history" checked /> Show reference history</label>
+            <br />
+            <label><input type="checkbox" data-control="daymet" checked /> Daymet · Cañones grid estimate</label>
             <label><input type="checkbox" data-control="abiquiu" /> Abiquiu Dam · NOAA observations</label>
             <p id="control-note" class="small" aria-live="polite">Controls compare daily temperature ranges and precipitation. Each source stays separate.</p>
             <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
