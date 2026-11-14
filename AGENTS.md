@@ -40,6 +40,12 @@
   Use these fixed ignored paths rather than configuring a secret-file path in `.env`.
 - Never commit credentials, captures, state, saved plans, or generated output.
 - Test environments use separate state, buckets, projects, and publisher credentials.
+- Keep reference observations and modeled estimates distinct from local measurements
+  in storage, charts, and network submissions. Preserve provenance, units, provider
+  calendars, quality flags, and missing-data coverage; do not invent observations.
+- Isolate external-data refresh failures from local collection and other providers.
+  Retain the last validated data, and distinguish provider coverage dates from
+  download/check times. Never imply that recently downloaded data is current weather.
 - Weather-network uploads must use verified WS90 outdoor observations. Additional
   sensors must not override those fields. Validate provenance before enabling uploads.
 - Use a WN31 auxiliary channel for garage readings; WN32 overrides primary WS90

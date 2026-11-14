@@ -7,7 +7,9 @@ import pytest
 from canones_weather.publish import publish
 
 
-@pytest.mark.parametrize("invalid", ["sample", "mismatched_dataset", "mismatched_timestamp", "unverified_production"])
+@pytest.mark.parametrize(
+    "invalid", ["sample", "reference", "mismatched_dataset", "mismatched_timestamp", "unverified_production"]
+)
 def test_rejects_unsafe_publication_before_connecting(tmp_path, monkeypatch, invalid):
     current = json.loads(Path("site/canones/data/sample/current.json").read_text())
     current.update(kind="live", deployment={"phase": "pilot", "dataset_id": "pilot-check", "notice": "Pilot data"})
@@ -18,8 +20,8 @@ def test_rejects_unsafe_publication_before_connecting(tmp_path, monkeypatch, inv
         "deployment": copy.deepcopy(current["deployment"]),
         "through": current["observed_at"],
     }
-    if invalid == "sample":
-        current["kind"] = "sample"
+    if invalid in ("sample", "reference"):
+        current["kind"] = invalid
     elif invalid == "mismatched_timestamp":
         history["through"] = "2000-01-01T00:00:00Z"
     elif invalid == "mismatched_dataset":

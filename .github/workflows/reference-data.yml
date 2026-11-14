@@ -1,0 +1,49 @@
+name: Refresh historical controls
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-controls
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh ${{ matrix.source }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [abiquiu, daymet]
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_EC2_METADATA_DISABLED: 'true'
+      R2_PUBLISHER_CONFIG: ${{ vars.R2_PUBLISHER_CONFIG }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.13.8'
+          python-version: '3.13'
+      - name: Configure public R2 destination
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          config = json.loads(os.environ['R2_PUBLISHER_CONFIG'])
+          Path('tmp').mkdir(exist_ok=True)
+          Path('tmp/publisher.json').write_text(json.dumps(config))
+          PY
+      - name: Refresh and publish validated control
+        run: >-
+          uv run --locked --group station python -m canones_weather.reference
+          --source ${{ matrix.source }}
+          --latitude 36.150028 --longitude=-106.445500
+          --publish-config tmp/publisher.json

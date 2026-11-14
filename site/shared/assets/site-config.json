@@ -11,7 +11,9 @@
     "notprod": {
       "hub": "https://weather-notprod.iceburg.net",
       "station": "https://canones.weather-notprod.iceburg.net",
-      "data": "https://data.weather-notprod.iceburg.net/canones/"
+      "data": "https://data.weather-notprod.iceburg.net/canones/",
+      "reference_feed": "https://data.weather-notprod.iceburg.net/canones/reference/"
     }
-  }
+  },
+  "reference_feed": "https://data.weather.iceburg.net/canones/reference/"
 }

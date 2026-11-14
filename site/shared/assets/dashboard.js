@@ -26,13 +26,10 @@ const state = {
   current: null,
   history: null,
   loading: false,
-};
-const colors = {
-  temperature: "#e4b17b",
-  humidity: "#9fbfd1",
-  solar: "#d7c7a4",
-  wind: "#a1c6ac",
-  rain: "#9fbfd1",
+  controls: new Set(),
+  references: {},
+  referenceCheckedAt: {},
+  controlErrors: new Set(),
 };
 let requestId = 0;
 
@@ -56,6 +53,14 @@ const units = () => ({
   humidity: "%",
   solar: "W/m²",
 });
+
+const metrics = {
+  temperature: {label: "Temperature", field: "temperature_c", color: "#e4b17b", convert: temp},
+  humidity: {label: "Relative humidity", field: "humidity_pct", color: "#9fbfd1"},
+  wind: {label: "Wind speed", field: "wind_speed_m_s", color: "#a1c6ac", convert: speed},
+  rain: {label: "Rainfall", field: "rain_mm", color: "#9fbfd1", convert: rain},
+  solar: {label: "Solar irradiance", field: "solar_w_m2", color: "#d7c7a4"},
+};
 
 function validEnvelope(data) {
   if (data.schema_version !== 1 || data.kind !== state.mode)
@@ -125,6 +130,24 @@ function validHistory(data) {
           throw new Error("History contains an invalid optional value.");
       }
     }
+  }
+  return data;
+}
+function validReference(data, key) {
+  if (data.schema_version !== 1 || data.kind !== "reference" || data.source?.id !== key ||
+      !["modeled", "observed"].includes(data.source.type) || typeof data.source.name !== "string" ||
+      !numeric(data.source.elevation_m) || !Array.isArray(data.daily) ||
+      !Number.isFinite(Date.parse(data.start_date)) || !Number.isFinite(Date.parse(data.end_date)))
+    throw new Error("Invalid reference metadata");
+  let previous = -Infinity;
+  for (const row of data.daily) {
+    if (!timestamp(row.at) || Date.parse(row.at) <= previous) throw new Error("Invalid reference dates");
+    previous = Date.parse(row.at);
+    for (const field of ["temperature_min_c", "temperature_max_c", "rain_mm"])
+      if (row[field] !== null && !numeric(row[field])) throw new Error("Invalid reference value");
+    if (numeric(row.rain_mm) && row.rain_mm < 0 || numeric(row.temperature_min_c) &&
+        numeric(row.temperature_max_c) && row.temperature_min_c > row.temperature_max_c)
+      throw new Error("Invalid reference range");
   }
   return data;
 }
@@ -235,39 +258,55 @@ function renderChart() {
   const history = state.history;
   const recent = state.period === "day" && Array.isArray(history?.recent);
   const resolution = seasonal ? "Seasonal" : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
-  const end = Date.parse(history?.through);
+  const end = Date.parse(history?.through ?? state.current?.observed_at ?? new Date().toISOString());
   const days = { day: 1, week: 7, month: 30, year: 365, all: Infinity }[
     state.period
   ];
-  const rows = seasonal ? seasonalRows(history?.daily ?? [], state.period === "monsoon") : history
-    ? history[daily ? "daily" : recent ? "recent" : "hourly"].filter(
-        (row) => Date.parse(row.at) > end - days * 86400000,
-      )
-    : [];
-  const label = {
-    temperature: "Temperature",
-    humidity: "Relative humidity",
-    wind: "Wind speed",
-    rain: "Rainfall",
-    solar: "Solar irradiance",
-  }[state.metric];
+  const selectRows = (data) => {
+    const selectedRows = (data?.[daily || seasonal ? "daily" : recent ? "recent" : "hourly"] ?? []).filter(
+      (row) => Date.parse(row.at) <= end && (seasonal || Date.parse(row.at) > end - days * 86400000),
+    );
+    return seasonal ? seasonalRows(selectedRows, state.period === "monsoon") : selectedRows;
+  };
+  let rows = selectRows(history);
+  const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
+  const stationName = state.mode === "sample" ? "Sample station" : "Secco Creek";
   $("history-subtitle").textContent =
-    `${state.mode === "sample" ? "Illustrative sample history" : "Station history"} · Mountain Time`;
+    `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`;
   $("history-resolution").textContent =
-    seasonal ? "Observed days · partial seasons included" : `${resolution} summaries · archive retained separately`;
-  $("history-range").textContent = seasonal && rows.length
-    ? `${rows[0].label} – ${rows.at(-1).label}`
-    : rows.length
-    ? `${dateFormat.format(new Date(rows[0].at))} – ${dateFormat.format(new Date(rows.at(-1).at))}`
-    : "No history available";
-  const field = {
-    temperature: "temperature_c",
-    humidity: "humidity_pct",
-    wind: "wind_speed_m_s",
-    rain: "rain_mm",
-    solar: "solar_w_m2",
-  }[state.metric];
-  if (!rows.some((row) => numeric(row[field]))) {
+    seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
+  const eligible = (daily || seasonal) && ["temperature", "rain"].includes(state.metric);
+  const selectedReferences = [...state.controls].map((key) => state.references[key]).filter(Boolean);
+  const comparisons = eligible ? selectedReferences.map((data) => ({
+    source: data.source,
+    rows: selectRows(data),
+  })) : [];
+  $("control-note").textContent = [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
+    : !eligible ? "Controls compare daily temperature ranges and precipitation in 1y, All, Seasons, or Monsoon."
+    : state.controls.size > selectedReferences.length ? "Loading historical controls…"
+    : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
+      " Separate reference records; neither establishes past conditions at Secco Creek."
+    : "Choose a control to overlay daily temperature ranges or precipitation; station observations remain separate.";
+  if (seasonal && comparisons.length) {
+    const periods = new Map([...rows, ...comparisons.flatMap((item) => item.rows)].map((row) => [row.start, row]));
+    const templates = [...periods.values()].sort((a, b) => a.start - b.start);
+    const align = (data) => templates.map((row) => data.find((item) => item.start === row.start) ??
+      {label: row.label, start: row.start, expectedDays: row.expectedDays, coverage: {}});
+    rows = align(rows);
+    for (const item of comparisons) item.rows = align(item.rows);
+  }
+  const rangeRows = [...rows, ...comparisons.flatMap((item) => item.rows)].sort((a, b) => seasonal ? a.start - b.start : Date.parse(a.at) - Date.parse(b.at));
+  $("history-range").textContent = !rangeRows.length ? "No history available" : seasonal
+    ? `${rangeRows[0].label} – ${rangeRows.at(-1).label}`
+    : `${dateFormat.format(new Date(rangeRows[0].at))} – ${dateFormat.format(new Date(rangeRows.at(-1).at))}`;
+  if (comparisons.length && timestamp(history?.record_started_at))
+    $("control-note").textContent += ` ${state.mode === "sample" ? "Sample station" : "Local archive"} begins ${dateFormat.format(new Date(history.record_started_at))}.`;
+  const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
+  const stationHasData = rows.some((row) => numeric(row[field]));
+  const referenceHasData = comparisons.some((item) => item.rows.some((row) => referenceFields.some((key) => numeric(row[key]))));
+  if (comparisons.length && !referenceHasData)
+    $("control-note").textContent += " No selected control values overlap this window.";
+  if (!stationHasData && !referenceHasData) {
     chart.clear();
     chart.setOption({
       title: {
@@ -286,46 +325,61 @@ function renderChart() {
     return;
   }
   const unit = units()[state.metric];
-  const convert = {
-    temperature: temp,
-    humidity: (value) => (numeric(value) ? value : null),
-    wind: speed,
-    rain,
-    solar: (value) => numeric(value) ? value : null,
-  }[state.metric];
-  const makeSeries = (name, key, color, extra = {}) => ({
-    name,
-    type: state.metric === "rain" ? "bar" : "line",
-    showSymbol: seasonal || rows.length === 1,
-    connectNulls: false,
-    data: rows.map((row, index) => [seasonal ? index : Date.parse(row.at), convert(row[key])]),
-    itemStyle: { color },
-    lineStyle: { color, width: 2 },
-    emphasis: { focus: "series" },
-    ...extra,
-  });
-  const series = [
-    makeSeries(state.metric === "temperature" ? "Mean temperature" : label, field, colors[state.metric]),
-  ];
+  const seriesMeta = new Map();
+  const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
+    seriesMeta.set(name, {rows: dataRows, key});
+    return {
+      name,
+      type: state.metric === "rain" ? "bar" : "line",
+      showSymbol: seasonal || dataRows.filter((row) => numeric(row[key])).length === 1,
+      connectNulls: false,
+      data: dataRows.map((row, index) => [seasonal ? index : Date.parse(row.at), convert(row[key])]),
+      itemStyle: { color },
+      lineStyle: { color, width: 2 },
+      emphasis: { focus: "series" },
+      ...extra,
+    };
+  };
+  const series = stationHasData ? [
+    makeSeries(comparisons.length ? `${stationName} · ${state.metric === "temperature" ? "mean" : label.toLowerCase()}` : state.metric === "temperature" ? "Mean temperature" : label, field, comparisons.length ? "#e4b17b" : color),
+  ] : [];
   if (state.metric === "temperature" && !recent &&
       rows.some((row) => numeric(row.temperature_min_c) || numeric(row.temperature_max_c))) {
-    series.push(
-      makeSeries(`${resolution} low`, "temperature_min_c", "#9fbfd1", {
-        lineStyle: { width: 1, type: "dashed", color: "#9fbfd1" },
-      }),
-    );
-    series.push(
-      makeSeries(`${resolution} high`, "temperature_max_c", "#bc8e84", {
-        lineStyle: { width: 1, type: "dashed", color: "#bc8e84" },
-      }),
-    );
+    for (const [suffix, key, rangeColor, style] of [
+      ["low", "temperature_min_c", "#9fbfd1", "dotted"],
+      ["high", "temperature_max_c", "#bc8e84", "dashed"],
+    ]) {
+      const seriesColor = comparisons.length ? "#e4b17b" : rangeColor;
+      const prefix = comparisons.length ? `${stationName} · ` : "";
+      series.push(makeSeries(`${prefix}${resolution} ${suffix}`, key, seriesColor, {
+        lineStyle: {width: 1, type: style, color: seriesColor},
+      }));
+    }
   }
-  if (state.metric === "wind")
+  if (state.metric === "wind" && stationHasData)
     series.push(
       makeSeries("Peak gust", "wind_gust_m_s", "#d7c7a4", {
         lineStyle: { width: 1, type: "dashed", color: "#d7c7a4" },
       }),
     );
+  for (const item of comparisons) {
+    const name = item.source.id === "daymet" ? "Daymet estimate" : "Abiquiu NOAA";
+    const color = item.source.id === "daymet" ? "#b8a3cf" : "#86b4cb";
+    for (const key of referenceFields) {
+      if (!item.rows.some((row) => numeric(row[key]))) continue;
+      const suffix = key === "temperature_min_c" ? "low" : key === "temperature_max_c" ? "high" : "precipitation";
+      series.push(makeSeries(`${name} · ${suffix}`, key, color, {
+        lineStyle: {color, width: 1.5, type: key === "temperature_min_c" ? "dashed" : "solid"},
+      }, item.rows));
+    }
+  }
+  if (comparisons.length && series.length && !seasonal && timestamp(history?.record_started_at)) {
+    series[0].markLine = {
+      symbol: "none", lineStyle: {color: "#e4b17b", type: "dashed"},
+      data: [{xAxis: Date.parse(history.record_started_at), name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
+      label: {formatter: "{b}", color: "#e4b17b", position: "insideEndTop"},
+    };
+  }
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   chart.setOption(
     {
@@ -339,6 +393,8 @@ function renderChart() {
       aria: { enabled: true },
       grid: { left: 10, right: 16, top: 34, bottom: seasonal ? 70 : 52, containLabel: true },
       legend: {
+        type: "scroll",
+        pageTextStyle: {color: "#a1b0ab"},
         show: series.length > 1,
         top: 0,
         right: 0,
@@ -349,14 +405,23 @@ function renderChart() {
         backgroundColor: "#22302e",
         borderColor: "#43534a",
         textStyle: { color: "#e8ebe4" },
-        formatter: (entries) =>
-          `${seasonal ? rows[entries[0].value[0]].label : timeFormat.format(new Date(entries[0].value[0]))}<br>${entries.map((entry) => `${entry.marker}${entry.seriesName}: ${numeric(entry.value[1]) ? entry.value[1].toFixed(state.metric === "rain" && state.units === "us" ? 2 : 1) + " " + unit : "Missing"}`).join("<br>")}${seasonal ? `<br>${rows[entries[0].value[0]].coverage[field]} / ${rows[entries[0].value[0]].expectedDays} calendar days have data` : ""}`,
+        formatter: (entries) => {
+          const title = seasonal ? rows[entries[0].value[0]].label : (daily ? dateFormat : timeFormat).format(new Date(entries[0].value[0]));
+          return `${title}<br>` + entries.map((entry) => {
+            const meta = seriesMeta.get(entry.seriesName);
+            const row = meta.rows[entry.dataIndex];
+            const value = state.metric === "rain" && row?.precipitation_trace ? "Trace" : numeric(entry.value[1])
+              ? entry.value[1].toFixed(state.metric === "rain" && state.units === "us" ? 2 : 1) + " " + unit : "Missing";
+            return `${entry.marker}${entry.seriesName}: ${value}${seasonal ? ` · ${row?.coverage?.[meta.key] ?? 0}/${row?.expectedDays} days` : ""}`;
+          }).join("<br>");
+        },
         axisPointer: { type: state.metric === "rain" ? "shadow" : "line" },
       },
       xAxis: {
         type: seasonal ? "category" : "time",
+        max: daily && comparisons.length ? end : undefined,
         ...(seasonal ? { data: rows.map((row) => row.label +
-          (!row.coverage[field] ? "\n(no data)" : row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
+          (comparisons.length ? "" : !row.coverage[field] ? "\n(no data)" : row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
         boundaryGap: state.metric === "rain",
         axisLine: { lineStyle: { color: "#35433e" } },
         axisTick: { show: false },
@@ -369,7 +434,7 @@ function renderChart() {
               timeZone: "America/Denver",
               ...(state.period === "day"
                 ? { hour: "numeric" }
-                : { month: "short", day: "numeric" }),
+                : { month: "short", ...(state.period === "all" ? { year: "numeric" } : { day: "numeric" }) }),
             }).format(new Date(value)),
         },
       },
@@ -406,18 +471,20 @@ function renderChart() {
     },
     true,
   );
-  const values = rows.map((row) => convert(row[field])).filter(numeric);
+  const values = [...rows.map((row) => convert(row[field])), ...comparisons.flatMap((item) => item.rows.flatMap((row) => referenceFields.map((key) => convert(row[key]))))].filter(numeric);
   const range = values.length
     ? `Values from ${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ${unit}.`
     : "No recorded values in this period.";
   $("chart-description").textContent = seasonal
     ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
     : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" && !recent ? "mean temperature, with minimum and maximum" : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
+  if (comparisons.length)
+    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : " No local daily values are available in this view yet; only the selected controls are shown."}`;
   if (state.metric === "solar")
     $("chart-description").textContent += " Solar means include nighttime readings. Sun angle, day length, shading, smoke, and clouds affect this light-derived estimate; it is not cloud-cover percentage.";
   $("chart").setAttribute(
     "aria-label",
-    `${state.mode === "sample" ? "Sample" : "Station"} ${label.toLowerCase()} chart. ${range}`,
+    `${stationName}${comparisons.length ? " and reference" : ""} ${label.toLowerCase()} chart. ${range}`,
   );
 }
 async function load({ refresh = false } = {}) {
@@ -449,7 +516,7 @@ async function load({ refresh = false } = {}) {
   $("json-link").hidden = false;
   notice(
     state.mode === "sample"
-      ? "Design preview. All readings and history shown here are illustrative sample data, not station observations."
+      ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
       : "Connecting to the station feed…",
   );
   const signal = AbortSignal.timeout(15000);
@@ -515,9 +582,45 @@ for (const group of ["metric", "period", "units", "mode"]) {
       }
     });
 }
+async function loadReference(key) {
+  state.referenceCheckedAt[key] = Date.now();
+  try {
+    state.references[key] = validReference(await readJSON(new URL(`${key}.json`, settings.reference_feed), AbortSignal.timeout(15000)), key);
+    state.controlErrors.delete(key);
+  } catch {
+    state.controlErrors.add(key);
+  }
+  renderChart();
+}
+for (const input of document.querySelectorAll("[data-control]")) {
+  input.addEventListener("change", async () => {
+    const key = input.dataset.control;
+    state.controlErrors.delete(key);
+    if (!input.checked) {
+      state.controls.delete(key);
+      renderChart();
+      return;
+    }
+    state.controls.add(key);
+    if (!["year", "all", "seasons", "monsoon"].includes(state.period)) {
+      state.period = "all";
+      selected("period", state.period);
+    }
+    if (!["temperature", "rain"].includes(state.metric)) {
+      state.metric = "temperature";
+      selected("metric", state.metric);
+    }
+    renderChart();
+    if (!state.references[key] || Date.now() - state.referenceCheckedAt[key] >= 3600000)
+      await loadReference(key);
+    renderChart();
+  });
+}
 new ResizeObserver(() => chart.resize()).observe($("chart"));
 setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
+  for (const key of state.controls)
+    if (Date.now() - state.referenceCheckedAt[key] >= 3600000) loadReference(key);
 }, 300000);
 await load();

@@ -33,7 +33,8 @@ production collection or network upload paths.
 ## Chart history
 
 Publish `canones/history.json` with `schema_version`, `kind`, `station_id`, and
-`through` (the latest observation represented), plus ascending `recent`, `hourly`, and `daily`
+`through` (the latest observation represented), optional `record_started_at`
+(the first archived observation, used for the source-boundary marker), plus ascending `recent`, `hourly`, and `daily`
 arrays. [The sample history](../site/canones/data/sample/history.json) illustrates
 the shape with 24 hours of five-minute data, 30 days of hourly data, and
 daily data beginning in January 2024.
@@ -121,3 +122,12 @@ Solar comparisons use the WS90 light-derived irradiance estimate in W/m², inclu
 nighttime readings. The WS90 measures light and UV, not cloud-cover percentage.
 Clouds, smoke, shading, sun angle, and day length affect the signal. No cloudiness
 percentage or sunshine duration is inferred from it. See [Ecowitt's sensor specifications](https://shop.ecowitt.com/collections/wifi-sensor/products/ws90).
+
+## Historical controls
+
+Separately attributed daily reference files live under `data/reference/` in the
+static station site. See [reference data](reference-data.md) for provenance, units,
+quality flags, calendars, coverage, refresh commands, and overlay semantics. They
+never enter the local archive or the current/history publisher.
+
+For weather-network registration and web indexing, see [publishing and discovery](publishing.md).

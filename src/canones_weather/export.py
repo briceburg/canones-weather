@@ -100,6 +100,7 @@ def export(manager, record, output_root):
         "kind": "live",
         "station_id": "canones",
         "through": iso(timestamp),
+        "record_started_at": iso(first),
         "recent": recent,
         "hourly": history_rows(
             manager, max(int((first - 1) // 3600) * 3600, hourly_stop - 30 * 86400), hourly_stop, 3600
