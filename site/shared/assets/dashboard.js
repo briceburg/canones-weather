@@ -496,7 +496,10 @@ function renderChart() {
         textStyle: { color: "#e8ebe4" },
         formatter: (entries) => {
           const title = seasonal ? rows[entries[0].value[0]].label : (daily ? dateFormat : timeFormat).format(new Date(entries[0].value[0]));
-          return `${title}<br>` + entries.map((entry) => {
+          const order = {temperature_max_c: 0, temperature_c: 1, temperature_min_c: 2};
+          const ordered = state.metric === "temperature" ? [...entries].sort((a, b) =>
+            order[seriesMeta.get(a.seriesName).key] - order[seriesMeta.get(b.seriesName).key]) : entries;
+          return `${title}<br>` + ordered.map((entry) => {
             const meta = seriesMeta.get(entry.seriesName);
             const row = meta.rows[entry.dataIndex];
             const value = state.metric === "rain" && row?.precipitation_trace ? "Trace" : numeric(entry.value[1])
