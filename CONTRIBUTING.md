@@ -21,13 +21,15 @@ integration check; no gateway is contacted by the tests.
 ## Website
 
 Run `bin/build-site` and follow the [local preview guide](site/README.md).
-For changed JavaScript, check syntax with Node.js 22+:
+For changed JavaScript, check syntax with Node.js 22.7+:
 
 ```sh
 node --input-type=module --check < site/shared/assets/dashboard.js
 ```
 
 Use the same command with the path of any other JavaScript file you change.
+Run the focused seasonal calculation checks with
+`node --test tests/test_seasons.mjs`.
 Keep sample data clearly labeled and check layouts on mobile and desktop.
 
 ## Infrastructure

@@ -162,6 +162,8 @@
               ><button type="button" data-period="all" aria-pressed="false">
                 All
               </button>
+              <button type="button" data-period="seasons" aria-pressed="false">Seasons</button>
+              <button type="button" data-period="monsoon" aria-pressed="false">Monsoon</button>
             </div>
           </div>
           <div class="chart-toolbar">
@@ -183,6 +185,7 @@
               ><button type="button" data-metric="rain" aria-pressed="false">
                 Rain
               </button>
+              <button type="button" data-metric="solar" aria-pressed="false">Solar</button>
             </div>
             <div class="segments" aria-label="Display units">
               <button type="button" data-units="us" aria-pressed="true">
@@ -199,6 +202,7 @@
             aria-label="Weather history chart. Loading sample data."
           ></div>
           <p class="chart-description" id="chart-description"></p>
+          <a id="monsoon-source" class="small" href="https://www.weather.gov/abq/prepawaremonsoonhome" hidden>NWS monsoon season: June 15–September 30 ↗</a>
           <p class="history-foot">
             <span id="history-range">—</span
             ><span id="history-resolution">—</span>

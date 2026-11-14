@@ -1,3 +1,7 @@
-# Prevent proxy modification, including automatic analytics beacon injection.
+# Revalidate site assets; prevent analytics injection only on HTML entry points.
 /*
-  Cache-Control: public, no-transform
+  Cache-Control: public, max-age=0, must-revalidate
+/
+  Cache-Control: no-transform
+/index.html
+  Cache-Control: no-transform
