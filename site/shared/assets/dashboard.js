@@ -344,19 +344,18 @@ function renderChart() {
     source: data.source,
     rows: selectRows(data),
   }));
-  $("control-note").textContent = activeControls.some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
-    : !eligible ? "Controls compare daily temperature ranges and precipitation in 30d, 1y, 3y, All, Seasons, or Monsoon."
-    : activeControls.length > selectedReferences.length ? "Loading historical controls…"
-    : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
-      " Regional reference records describe their own locations, not past conditions at Secco Creek."
-    : "Choose a regional reference to compare temperature or precipitation. Madrid is precipitation only.";
+  $("control-note").textContent = activeControls.some((key) => state.controlErrors.has(key)) ? "A source could not be loaded. Uncheck and reselect to retry."
+    : !eligible ? "References support temperature and precipitation in 30d and longer views."
+    : activeControls.length > selectedReferences.length ? "Loading reference history…"
+    : selectedReferences.length ? selectedReferences.map((data) => `${referenceSources[data.source.id].name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ")
+    : "Select sources to compare regional weather.";
   if (showReferences) {
     $("history-subtitle").textContent = stationInWindow
       ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
       : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
-    $("control-note").textContent += " Reference coverage may end before the selected window; unreported days remain gaps.";
+    $("control-note").textContent += " Gaps indicate unreported days.";
     if (selectedReferences.some((data) => data.source.supplement))
-      $("control-note").textContent += " Abiquiu includes same-station RCC-ACIS supplemental reports; daily tooltips identify those values. Some reports may be preliminary.";
+      $("control-note").textContent += " Abiquiu includes RCC-ACIS reports, possibly preliminary; daily tooltips identify supplemented values.";
   }
   if (seasonal && comparisons.length) {
     const periods = new Map([...rows, ...comparisons.flatMap((item) => item.rows)].map((row) => [row.start, row]));
