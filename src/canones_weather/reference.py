@@ -4,15 +4,15 @@ import argparse
 import csv
 import io
 import json
-import os
 import re
 import sys
-import tempfile
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
+
+from canones_weather.jsonio import write_json
 
 ZONE = ZoneInfo("America/Denver")
 NOAA_ID = "USC00290041"
@@ -108,7 +108,6 @@ def document(source, rows, start, end):
 def fetch_reference(key, args):
     start = date(args.start_year, 1, 1)
     end = date(args.end_year, 12, 31) if args.end_year else date.today() - timedelta(days=1)
-    citation, elevation = None, None
     if key == "daymet":
         url = (
             DAYMET_URL
@@ -136,59 +135,35 @@ def fetch_reference(key, args):
         if args.end_year and latest_year < args.end_year:
             raise ValueError("Requested Daymet year is not available")
         end = date(latest_year, 12, 31)
+        source = {
+            "id": "daymet",
+            "name": "Daymet · Cañones grid estimate",
+            "type": "modeled",
+            "url": "https://daymet.ornl.gov/",
+            "download_url": url,
+            "citation": citation.group(),
+            "latitude": args.latitude,
+            "longitude": args.longitude,
+            "elevation_m": elevation,
+            "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from Secco Creek. Leap-year December 31 is absent; gaps are preserved.",
+        }
     else:
         rows = noaa_rows(download(NOAA_URL), start, end)
         end = max(rows)
-    sources = {
-        "daymet": (
-            {
-                "id": "daymet",
-                "name": "Daymet · Cañones grid estimate",
-                "type": "modeled",
-                "url": "https://daymet.ornl.gov/",
-                "download_url": url if key == "daymet" else None,
-                "citation": citation.group() if citation else None,
-                "latitude": args.latitude,
-                "longitude": args.longitude,
-                "elevation_m": elevation,
-                "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from Secco Creek. Leap-year December 31 is absent; gaps are preserved.",
-            },
-            rows,
-        ),
-        "abiquiu": (
-            {
-                "id": "abiquiu",
-                "name": "Abiquiu Dam · NOAA observations",
-                "type": "observed",
-                "station_id": NOAA_ID,
-                "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
-                "download_url": NOAA_URL,
-                "citation": "https://doi.org/10.7289/V5D21VHZ",
-                "latitude": 36.2403,
-                "longitude": -106.4278,
-                "elevation_m": 1944.6,
-                "notes": "Daily reporting dates may cover non-midnight observation periods. NOAA quality-flagged, missing, and presumed-zero values are excluded; trace precipitation is retained as flagged zero.",
-            },
-            rows,
-        ),
-    }
-    source, _ = sources[key]
+        source = {
+            "id": "abiquiu",
+            "name": "Abiquiu Dam · NOAA observations",
+            "type": "observed",
+            "station_id": NOAA_ID,
+            "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
+            "download_url": NOAA_URL,
+            "citation": "https://doi.org/10.7289/V5D21VHZ",
+            "latitude": 36.2403,
+            "longitude": -106.4278,
+            "elevation_m": 1944.6,
+            "notes": "Daily reporting dates may cover non-midnight observation periods. NOAA quality-flagged, missing, and presumed-zero values are excluded; trace precipitation is retained as flagged zero.",
+        }
     return document(source, rows, start, end)
-
-
-def save(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    body = (json.dumps(data, separators=(",", ":"), allow_nan=False) + "\n").encode()
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
-            temporary = stream.name
-            stream.write(body)
-        os.replace(temporary, path)
-    finally:
-        if temporary and os.path.exists(temporary):
-            os.unlink(temporary)
-    return body
 
 
 def main():
@@ -212,7 +187,7 @@ def main():
     for key in ["daymet", "abiquiu"] if args.source == "both" else [args.source]:
         try:
             data = fetch_reference(key, args)
-            body = save(args.output / f"{key}.json", data)
+            body = write_json(args.output / f"{key}.json", data)
             if config:
                 from canones_weather.publish import publishing_client
 
