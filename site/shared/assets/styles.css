@@ -328,17 +328,6 @@ p {
   min-width: 0;
   width: 100%;
 }
-.station-details {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 24px;
-}
-.station-header .station-tagline {
-  margin-left: auto;
-  text-align: right;
-}
 .station-header .station-clock {
   display: flex;
   flex-wrap: wrap;
@@ -346,9 +335,8 @@ p {
   gap: 4px 14px;
 }
 .station-clock time {
-  font-size: clamp(1.2rem, 2.5vw, 1.55rem);
+  font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
-  color: var(--text);
 }
 .mode-controls {
   display: flex;
