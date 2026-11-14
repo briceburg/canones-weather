@@ -82,7 +82,8 @@ software license does not replace provider data terms.
 uv run python -m canones_weather.reference \
   --latitude 36.150028 --longitude=-106.445500 \
   --start-year 2016 --output tmp/reference
-# To publish, add --publish-config tmp/publisher.json and provide bucket-scoped credentials.
+# To publish, use uv run --group station, add --publish-config tmp/publisher.json,
+# and provide bucket-scoped credentials.
 ```
 
 Controls are generated outside Git and served from the configured R2 reference

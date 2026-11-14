@@ -62,7 +62,7 @@ extremes or turn missing rainfall into a dry period.
 
 The exporter supplies the last 24 hours at five-minute resolution in `recent`,
 30 days of hourly summaries, and daily summaries for the full archive. The browser
-uses recent rows for 24h, hourly rows for 7d/30d, and daily rows for 1y/All.
+uses recent rows for 24h, hourly rows for 30d, and daily rows for 1y/3y/All.
 Older feeds without `recent` use hourly rows for 24h. All means
 all daily history supplied by the feed. Chart windows do not set archive
 retention: retain the full five-minute archive and consistent off-device backups
@@ -131,3 +131,13 @@ quality flags, calendars, coverage, refresh commands, and overlay semantics. The
 never enter the local archive or the current/history publisher.
 
 For weather-network registration and web indexing, see [publishing and discovery](publishing.md).
+
+## Timeline navigation
+
+The 1y and 3y buttons preset the latest 365 or 1,095 days over the full available
+daily history; older records remain available by panning. All resets to the full
+record. Drag the chart to pan, drag slider handles to resize the window, or use
+Ctrl + scroll to zoom. The chart follows the latest data until the user changes
+the window. A dragged time window retains its dates through unit/measurement
+changes and refreshes; a period or data-mode button resets the preset. The footer
+labels available history, which can extend beyond the visible window.

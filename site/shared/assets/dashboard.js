@@ -1,5 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
+import { timelineRange } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -26,12 +27,24 @@ const state = {
   current: null,
   history: null,
   loading: false,
+  viewport: null,
   controls: new Set(),
   references: {},
   referenceCheckedAt: {},
   controlErrors: new Set(),
 };
 let requestId = 0;
+let timelineDomain = null;
+function rememberViewport() {
+  const zoom = chart.getOption().dataZoom?.[0];
+  if (!timelineDomain || !numeric(zoom?.start) || !numeric(zoom?.end)) return;
+  const {start, end} = timelineDomain;
+  state.viewport = timelineDomain.seasonal ? {start: zoom.start, end: zoom.end} : {
+    from: start + (end - start) * zoom.start / 100,
+    to: start + (end - start) * zoom.end / 100,
+  };
+}
+chart.on("datazoom", rememberViewport);
 
 const numeric = (value) => typeof value === "number" && Number.isFinite(value);
 const rounded = (value, decimals = 1) =>
@@ -252,19 +265,20 @@ function renderStatus() {
     );
 }
 function renderChart() {
+  if (state.viewport) rememberViewport();
   const seasonal = ["seasons", "monsoon"].includes(state.period);
   $("monsoon-source").hidden = state.period !== "monsoon";
-  const daily = ["year", "all"].includes(state.period);
+  const daily = ["year", "three-years", "all"].includes(state.period);
   const history = state.history;
   const recent = state.period === "day" && Array.isArray(history?.recent);
   const resolution = seasonal ? "Seasonal" : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
   const end = Date.parse(history?.through ?? state.current?.observed_at ?? new Date().toISOString());
-  const days = { day: 1, week: 7, month: 30, year: 365, all: Infinity }[
+  const days = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity }[
     state.period
   ];
   const selectRows = (data) => {
     const selectedRows = (data?.[daily || seasonal ? "daily" : recent ? "recent" : "hourly"] ?? []).filter(
-      (row) => Date.parse(row.at) <= end && (seasonal || Date.parse(row.at) > end - days * 86400000),
+      (row) => Date.parse(row.at) <= end && (daily || seasonal || Date.parse(row.at) > end - days * 86400000),
     );
     return seasonal ? seasonalRows(selectedRows, state.period === "monsoon") : selectedRows;
   };
@@ -282,7 +296,7 @@ function renderChart() {
     rows: selectRows(data),
   })) : [];
   $("control-note").textContent = [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
-    : !eligible ? "Controls compare daily temperature ranges and precipitation in 1y, All, Seasons, or Monsoon."
+    : !eligible ? "Controls compare daily temperature ranges and precipitation in 1y, 3y, All, Seasons, or Monsoon."
     : state.controls.size > selectedReferences.length ? "Loading historical controls…"
     : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
       " Separate reference records; neither establishes past conditions at Secco Creek."
@@ -298,7 +312,7 @@ function renderChart() {
   const rangeRows = [...rows, ...comparisons.flatMap((item) => item.rows)].sort((a, b) => seasonal ? a.start - b.start : Date.parse(a.at) - Date.parse(b.at));
   $("history-range").textContent = !rangeRows.length ? "No history available" : seasonal
     ? `${rangeRows[0].label} – ${rangeRows.at(-1).label}`
-    : `${dateFormat.format(new Date(rangeRows[0].at))} – ${dateFormat.format(new Date(rangeRows.at(-1).at))}`;
+    : `Available ${dateFormat.format(new Date(rangeRows[0].at))} – ${dateFormat.format(new Date(rangeRows.at(-1).at))}`;
   if (comparisons.length && timestamp(history?.record_started_at))
     $("control-note").textContent += ` ${state.mode === "sample" ? "Sample station" : "Local archive"} begins ${dateFormat.format(new Date(history.record_started_at))}.`;
   const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
@@ -307,6 +321,7 @@ function renderChart() {
   if (comparisons.length && !referenceHasData)
     $("control-note").textContent += " No selected control values overlap this window.";
   if (!stationHasData && !referenceHasData) {
+    timelineDomain = null;
     chart.clear();
     chart.setOption({
       title: {
@@ -380,6 +395,9 @@ function renderChart() {
       label: {formatter: "{b}", color: "#e4b17b", position: "insideEndTop"},
     };
   }
+  timelineDomain = seasonal ? {start: 0, end: rows.length - 1, seasonal: true} :
+    {start: Date.parse(rangeRows[0].at), end, seasonal: false};
+  const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : timelineRange(timelineDomain, days, state.viewport);
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   chart.setOption(
     {
@@ -419,7 +437,8 @@ function renderChart() {
       },
       xAxis: {
         type: seasonal ? "category" : "time",
-        max: daily && comparisons.length ? end : undefined,
+        min: seasonal ? undefined : timelineDomain.start,
+        max: seasonal ? undefined : end,
         ...(seasonal ? { data: rows.map((row) => row.label +
           (comparisons.length ? "" : !row.coverage[field] ? "\n(no data)" : row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
         boundaryGap: state.metric === "rain",
@@ -434,7 +453,7 @@ function renderChart() {
               timeZone: "America/Denver",
               ...(state.period === "day"
                 ? { hour: "numeric" }
-                : { month: "short", ...(state.period === "all" ? { year: "numeric" } : { day: "numeric" }) }),
+                : { month: "short", ...(daily ? { year: "numeric" } : { day: "numeric" }) }),
             }).format(new Date(value)),
         },
       },
@@ -451,9 +470,10 @@ function renderChart() {
         axisLabel: { color: "#a1b0ab" },
       },
       dataZoom: [
-        { type: "inside", zoomOnMouseWheel: "ctrl" },
+        { type: "inside", zoomOnMouseWheel: "ctrl", moveOnMouseMove: true, moveOnMouseWheel: false, ...zoom },
         {
           type: "slider",
+          ...zoom,
           bottom: 4,
           height: 18,
           borderColor: "#35433e",
@@ -473,7 +493,7 @@ function renderChart() {
   );
   const values = [...rows.map((row) => convert(row[field])), ...comparisons.flatMap((item) => item.rows.flatMap((row) => referenceFields.map((key) => convert(row[key]))))].filter(numeric);
   const range = values.length
-    ? `Values from ${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ${unit}.`
+    ? `Available values span ${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ${unit}.`
     : "No recorded values in this period.";
   $("chart-description").textContent = seasonal
     ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
@@ -570,6 +590,7 @@ for (const group of ["metric", "period", "units", "mode"]) {
   for (const button of document.querySelectorAll(`[data-${group}]`))
     button.addEventListener("click", () => {
       state[group] = button.dataset[group];
+      if (group === "period" || group === "mode") state.viewport = null;
       if (group === "period" && state.period === "monsoon") {
         state.metric = "rain";
         selected("metric", state.metric);
@@ -595,6 +616,7 @@ async function loadReference(key) {
 for (const input of document.querySelectorAll("[data-control]")) {
   input.addEventListener("change", async () => {
     const key = input.dataset.control;
+    if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
     state.controlErrors.delete(key);
     if (!input.checked) {
       state.controls.delete(key);
@@ -602,8 +624,9 @@ for (const input of document.querySelectorAll("[data-control]")) {
       return;
     }
     state.controls.add(key);
-    if (!["year", "all", "seasons", "monsoon"].includes(state.period)) {
+    if (!["year", "three-years", "all", "seasons", "monsoon"].includes(state.period)) {
       state.period = "all";
+      state.viewport = null;
       selected("period", state.period);
     }
     if (!["temperature", "rain"].includes(state.metric)) {

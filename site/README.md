@@ -22,7 +22,8 @@ hostname selects the measured feed. Local previews start with samples; select
 Live feed to read the public production JSON. `bin/pi snapshot` instead connects
 the local build to a copied Pi feed.
 Tabs select temperature, humidity, wind, rain, and solar irradiance; periods extend from 24 hours to
-all available daily history. Display units can change without changing the feed.
+all available daily history, including a 3y preset. Drag the plot to pan or the
+timeline handles to zoom; a chosen date window survives unit changes and refreshes. Display units can change without changing the feed.
 Live mode has unavailable/stale states and no sample fallback. Pilot observations
 retain a prominent provisional-placement and unverified-source notice.
 See [the data contract](../docs/data.md) for feed requirements.
