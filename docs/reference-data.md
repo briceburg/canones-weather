@@ -118,6 +118,9 @@ uv run python -m canones_weather.reference \
 # and provide bucket-scoped credentials.
 ```
 
+Coordinates are required only when Daymet is included. NOAA-only requests use
+their station metadata and allow records before 1980.
+
 Controls are generated outside Git and served from the configured R2 reference
 feed, independently of Pages builds. The local default output is ignored
 `tmp/reference/`. Use `--source abiquiu`, `daymet`, `albuquerque`, or `madrid` to refresh one source;
