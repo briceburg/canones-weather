@@ -14,8 +14,8 @@ def test_archive_export_preserves_units_gaps_and_unverified_provenance(tmp_path)
     today = startOfDay(1794626100)
     yesterday = startOfDay(today - 1)
     records = [
-        {"dateTime": yesterday + 36000, "outTemp": 68.0, "rain": 0.1, "windGust": 6.0},
-        {"dateTime": yesterday + 36300, "outTemp": 86.0, "rain": 0.2, "windGust": 10.0},
+        {"dateTime": yesterday + 36300, "outTemp": 68.0, "rain": 0.1, "windGust": 6.0},
+        {"dateTime": yesterday + 36600, "outTemp": 86.0, "rain": 0.2, "windGust": 10.0},
         {"dateTime": today + 300, "outTemp": None, "rain": None, "windGust": None},
     ]
     for record in records:
@@ -42,3 +42,12 @@ def test_archive_export_preserves_units_gaps_and_unverified_provenance(tmp_path)
     assert day["rain_mm"] == pytest.approx(7.62)
     assert day["wind_gust_m_s"] == pytest.approx(4.4704)
     assert any(row["temperature_c"] is None and row["rain_mm"] is None for row in history["hourly"])
+
+    hour = next(row for row in history["hourly"] if row["temperature_c"] is not None)
+    assert hour["temperature_c"] == pytest.approx(25.0)
+    assert hour["temperature_min_c"] == pytest.approx(20.0)
+    assert hour["temperature_max_c"] == pytest.approx(30.0)
+    recent = [row for row in history["recent"] if row["temperature_c"] is not None]
+    assert [row["temperature_c"] for row in recent] == [20.0, 30.0]
+    assert recent[0]["at"] == time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(records[0]["dateTime"]))
+    assert history["recent"][-1]["at"] == current["observed_at"]

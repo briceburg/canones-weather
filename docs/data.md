@@ -33,7 +33,7 @@ production collection or network upload paths.
 ## Chart history
 
 Publish `canones/history.json` with `schema_version`, `kind`, `station_id`, and
-`through` (the latest observation represented), plus ascending `hourly` and `daily`
+`through` (the latest observation represented), plus ascending `recent`, `hourly`, and `daily`
 arrays. [The sample history](../site/canones/data/sample/history.json) illustrates
 the shape with 30 days of hourly data and two years of daily data.
 
@@ -46,17 +46,21 @@ Each row has `at` and these fields:
 | `wind_speed_m_s` | Mean speed |
 | `wind_gust_m_s` | Maximum observed gust |
 | `rain_mm` | Interval total |
-| `temperature_min_c`, `temperature_max_c` | Daily extrema; optional on hourly rows |
+| `temperature_min_c`, `temperature_max_c` | Interval extrema; optional for older feeds |
 
-Timestamps identify interval starts. Publish only completed history intervals;
+Recent timestamps identify five-minute interval ends, matching the archive and
+current observation. Hourly and daily timestamps identify interval starts. Publish only completed history intervals;
 current conditions may be newer. Use WeeWX aggregation for exports; do not
 reconstruct archive records from instantaneous gateway snapshots. Represent
 missing intervals with timestamped rows of `null` values so gaps remain visible
 in plots. The dashboard displays times in the station's time zone.
-Daily temperatures include mean, minimum, and maximum; averaging must not discard
+Hourly and daily temperatures include mean, minimum, and maximum; averaging must not discard
 extremes or turn missing rainfall into a dry period.
 
-The browser uses hourly rows for 24h/7d/30d and daily rows for 1y/All. All means
+The exporter supplies the last 24 hours at five-minute resolution in `recent`,
+30 days of hourly summaries, and daily summaries for the full archive. The browser
+uses recent rows for 24h, hourly rows for 7d/30d, and daily rows for 1y/All.
+Older feeds without `recent` use hourly rows for 24h. All means
 all daily history supplied by the feed. Chart windows do not set archive
 retention: retain the full five-minute archive and consistent off-device backups
 independently of these exports.

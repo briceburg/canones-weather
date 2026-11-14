@@ -43,7 +43,11 @@ def write_json(path, data):
 def history_rows(manager, start, stop, interval):
     if start >= stop:
         return []
-    rows = {span.start: {"at": iso(span.start)} for span in intervalgen(start, stop, interval)}
+    recent = interval == 300
+    rows = {
+        (span.stop if recent else span.start): {"at": iso(span.stop if recent else span.start)}
+        for span in intervalgen(start, stop, interval)
+    }
     fields = [
         ("temperature_c", "outTemp", "avg", "degree_C"),
         ("humidity_pct", "outHumidity", "avg", "percent"),
@@ -51,7 +55,7 @@ def history_rows(manager, start, stop, interval):
         ("wind_gust_m_s", "windGust", "max", "meter_per_second"),
         ("rain_mm", "rain", "sum", "mm"),
     ]
-    if interval == "day":
+    if not recent:
         fields += [
             ("temperature_min_c", "outTemp", "min", "degree_C"),
             ("temperature_max_c", "outTemp", "max", "degree_C"),
@@ -59,10 +63,14 @@ def history_rows(manager, start, stop, interval):
     for field, observation, aggregate, unit in fields:
         for row in rows.values():
             row[field] = None
-        starts, _, values = weewx.xtypes.get_series(
-            observation, TimeSpan(start, stop), manager, aggregate_type=aggregate, aggregate_interval=interval
+        starts, ends, values = weewx.xtypes.get_series(
+            observation,
+            TimeSpan(start, stop),
+            manager,
+            aggregate_type=None if recent else aggregate,
+            aggregate_interval=interval,
         )
-        for timestamp, value in zip(starts[0], values[0]):
+        for timestamp, value in zip((ends if recent else starts)[0], values[0]):
             if timestamp in rows:
                 converted = weewx.units.convert((value, values[1], values[2]), unit)[0]
                 rows[timestamp][field] = number(converted)
@@ -84,12 +92,14 @@ def export(manager, record, output_root):
             "from the garage WN32. Sensor mapping is unverified; Wunderground/CWOP publishing is disabled."
         ),
     }
+    recent = history_rows(manager, max(int((first - 1) // 300) * 300, timestamp - 86400), timestamp, 300)
     history = {
         "deployment": deployment,
         "schema_version": 1,
         "kind": "live",
         "station_id": "canones",
         "through": iso(timestamp),
+        "recent": recent,
         "hourly": history_rows(
             manager, max(int((first - 1) // 3600) * 3600, hourly_stop - 30 * 86400), hourly_stop, 3600
         ),

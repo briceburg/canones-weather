@@ -89,10 +89,11 @@ function validHistory(data) {
     data.station_id !== "canones" ||
     !timestamp(data.through) ||
     !Array.isArray(data.hourly) ||
-    !Array.isArray(data.daily)
+    !Array.isArray(data.daily) ||
+    (data.recent !== undefined && !Array.isArray(data.recent))
   )
     throw new Error("The history feed is incomplete.");
-  for (const series of [data.hourly, data.daily]) {
+  for (const series of [data.recent ?? [], data.hourly, data.daily]) {
     let previous = -Infinity;
     for (const row of series) {
       if (
@@ -227,12 +228,14 @@ function renderStatus() {
 function renderChart() {
   const daily = ["year", "all"].includes(state.period);
   const history = state.history;
+  const recent = state.period === "day" && Array.isArray(history?.recent);
+  const resolution = daily ? "Daily" : recent ? "Five-minute" : "Hourly";
   const end = Date.parse(history?.through);
   const days = { day: 1, week: 7, month: 30, year: 365, all: Infinity }[
     state.period
   ];
   const rows = history
-    ? history[daily ? "daily" : "hourly"].filter(
+    ? history[daily ? "daily" : recent ? "recent" : "hourly"].filter(
         (row) => Date.parse(row.at) > end - days * 86400000,
       )
     : [];
@@ -244,9 +247,8 @@ function renderChart() {
   }[state.metric];
   $("history-subtitle").textContent =
     `${state.mode === "sample" ? "Illustrative sample history" : "Station history"} · Mountain Time`;
-  $("history-resolution").textContent = daily
-    ? "Daily summaries · archive retained separately"
-    : "Hourly summaries · archive retained separately";
+  $("history-resolution").textContent =
+    `${resolution} summaries · archive retained separately`;
   $("history-range").textContent = rows.length
     ? `${dateFormat.format(new Date(rows[0].at))} – ${dateFormat.format(new Date(rows.at(-1).at))}`
     : "No history available";
@@ -290,15 +292,18 @@ function renderChart() {
     emphasis: { focus: "series" },
     ...extra,
   });
-  const series = [makeSeries(label, field, colors[state.metric])];
-  if (state.metric === "temperature" && daily) {
+  const series = [
+    makeSeries(state.metric === "temperature" ? "Mean temperature" : label, field, colors[state.metric]),
+  ];
+  if (state.metric === "temperature" && !recent &&
+      rows.some((row) => numeric(row.temperature_min_c) || numeric(row.temperature_max_c))) {
     series.push(
-      makeSeries("Daily low", "temperature_min_c", "#9fbfd1", {
+      makeSeries(`${resolution} low`, "temperature_min_c", "#9fbfd1", {
         lineStyle: { width: 1, type: "dashed", color: "#9fbfd1" },
       }),
     );
     series.push(
-      makeSeries("Daily high", "temperature_max_c", "#bc8e84", {
+      makeSeries(`${resolution} high`, "temperature_max_c", "#bc8e84", {
         lineStyle: { width: 1, type: "dashed", color: "#bc8e84" },
       }),
     );
@@ -392,7 +397,7 @@ function renderChart() {
     ? `Values from ${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ${unit}.`
     : "No recorded values in this period.";
   $("chart-description").textContent =
-    `${daily ? "Daily" : "Hourly"} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" && daily ? "mean temperature, with minimum and maximum" : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
+    `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" && !recent ? "mean temperature, with minimum and maximum" : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
   $("chart").setAttribute(
     "aria-label",
     `${state.mode === "sample" ? "Sample" : "Station"} ${label.toLowerCase()} chart. ${range}`,
