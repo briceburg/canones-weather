@@ -356,7 +356,7 @@ function renderChart() {
       xAxis: {
         type: seasonal ? "category" : "time",
         ...(seasonal ? { data: rows.map((row) => row.label +
-          (row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
+          (!row.coverage[field] ? "\n(no data)" : row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
         boundaryGap: state.metric === "rain",
         axisLine: { lineStyle: { color: "#35433e" } },
         axisTick: { show: false },
