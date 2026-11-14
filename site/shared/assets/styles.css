@@ -337,7 +337,8 @@ p {
   gap: 3px;
   max-width: 100%;
 }
-.segments button {
+.segments button,
+.segments .custom-period {
   border: 0;
   background: none;
   color: var(--muted);
@@ -346,7 +347,8 @@ p {
   border-radius: 5px;
   white-space: nowrap;
 }
-.segments button[aria-pressed="true"] {
+.segments button[aria-pressed="true"],
+.segments .custom-period {
   background: #30413f;
   color: var(--text);
 }

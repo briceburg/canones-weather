@@ -43,6 +43,7 @@ function rememberViewport() {
     from: start + (end - start) * zoom.start / 100,
     to: start + (end - start) * zoom.end / 100,
   };
+  renderPeriodSelection();
 }
 chart.on("datazoom", rememberViewport);
 
@@ -183,6 +184,14 @@ function selected(group, value) {
       ),
     );
 }
+function renderPeriodSelection() {
+  const custom = state.viewport !== null;
+  selected("period", custom ? null : state.period);
+  $("custom-period").hidden = !custom;
+  $("custom-period").title = custom && !timelineDomain?.seasonal
+    ? `${timeFormat.format(new Date(state.viewport.from))} – ${timeFormat.format(new Date(state.viewport.to))}`
+    : "Custom history window";
+}
 function renderCurrent() {
   const data = state.current;
   const observation = data?.outdoor ?? {};
@@ -266,6 +275,7 @@ function renderStatus() {
 }
 function renderChart() {
   if (state.viewport) rememberViewport();
+  renderPeriodSelection();
   const seasonal = ["seasons", "monsoon"].includes(state.period);
   $("monsoon-source").hidden = state.period !== "monsoon";
   const daily = ["month", "year", "three-years", "all"].includes(state.period);
