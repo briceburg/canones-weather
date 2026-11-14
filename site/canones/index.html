@@ -273,13 +273,12 @@
             <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
             <fieldset class="reference-sources">
               <legend>Reference history</legend>
-              <label><input type="checkbox" data-control="daymet" checked /> <span>Daymet <span class="muted">— reference · modeled near station</span></span></label>
-              <label><input type="checkbox" data-control="abiquiu" /> <span>Abiquiu Dam <span class="muted">— reference · NOAA + RCC-ACIS</span></span></label>
-              <label><input type="checkbox" data-control="albuquerque" /> <span>Albuquerque airport <span class="muted">— reference · NOAA observations</span></span></label>
-              <label><input type="checkbox" data-control="madrid" /> <span>Madrid 1.9 SE <span class="muted">— reference · precipitation only</span></span></label>
-              <p class="small">Regional comparisons; each location has its own weather. References do not replace station observations.</p>
+              <label><input type="checkbox" data-control="daymet" checked /> <span>Daymet <span class="muted">— modeled near station</span></span></label>
+              <label><input type="checkbox" data-control="abiquiu" /> <span>Abiquiu Dam <span class="muted">— NOAA + RCC-ACIS</span></span></label>
+              <label><input type="checkbox" data-control="albuquerque" /> <span>Albuquerque airport <span class="muted">— NOAA</span></span></label>
+              <label><input type="checkbox" data-control="madrid" /> <span>Madrid 1.9 SE <span class="muted">— precipitation only</span></span></label>
             </fieldset>
-            <p id="control-note" class="small" aria-live="polite">Controls compare daily temperature ranges and precipitation. Each source stays separate.</p>
+            <p id="control-note" class="small" aria-live="polite">Select sources to compare regional weather.</p>
             <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
           </fieldset>
           <p class="chart-description" id="chart-description"></p>

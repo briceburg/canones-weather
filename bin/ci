@@ -2,8 +2,9 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
-uv run --locked ruff check . bin/generate-sample
-uv run --locked ruff format --check . bin/generate-sample
+python_scripts=(bin/generate-sample bin/create-release)
+uv run --locked ruff check . "${python_scripts[@]}"
+uv run --locked ruff format --check . "${python_scripts[@]}"
 uv run --locked --group station pytest -q
 for source in site/shared/assets/*.js; do
   node --input-type=module --check < "$source"

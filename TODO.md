@@ -23,9 +23,8 @@ data hostname. Browser requests and identified clients work. Inspect the
 host-specific security configuration before changing shared zone settings; avoid
 broad account permissions merely to address this exception.
 
-## Reference refresh operations
+## Reliability
 
-Watch scheduled reference-workflow results and the providers' actual coverage
-dates. GitHub disables public-repository schedules after 60 days of inactivity;
-re-enable them if needed. Evaluate an external scheduler if that operational
-constraint becomes unsuitable; do not couple reference fetches to local collection.
+- [Independent rain-gauge validation](https://github.com/briceburg/canones-weather/issues/7).
+- [GW3000 SD logging and tested outage recovery](https://github.com/briceburg/canones-weather/issues/8).
+- [Private archive backups and reliability alerts](https://github.com/briceburg/canones-weather/issues/9).

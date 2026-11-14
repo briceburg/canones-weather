@@ -92,17 +92,22 @@ def export(manager, record, output_root):
         "daily": history_rows(manager, start, daily_stop, "day"),
     }
     day_start = startOfDay(timestamp)
-    rain_today = None
-    covered, records, known_rain = manager.getSql(
-        "SELECT COALESCE(SUM(interval), 0) * 60, COUNT(*), COUNT(rain) "
-        "FROM archive WHERE dateTime > ? AND dateTime <= ?",
-        (day_start, timestamp),
-    )
+    rain_today = number(metric.get("dayRain"))
+    if rain_today is not None and rain_today < 0:
+        rain_today = None
+    rain_source = "ws90_daily_counter" if rain_today is not None else None
     if timestamp == day_start:
-        rain_today = 0.0
-    elif covered >= timestamp - day_start and records == known_rain:
-        aggregate = weewx.xtypes.get_aggregate("rain", TimeSpan(day_start, timestamp), "sum", manager)
-        rain_today = weewx.units.convert(aggregate, "mm")[0]
+        rain_today, rain_source = 0.0, "local_midnight_reset"
+    elif rain_today is None:
+        covered, records, known_rain = manager.getSql(
+            "SELECT COALESCE(SUM(interval), 0) * 60, COUNT(*), COUNT(rain) "
+            "FROM archive WHERE dateTime > ? AND dateTime <= ?",
+            (day_start, timestamp),
+        )
+        if covered >= timestamp - day_start and records == known_rain:
+            aggregate = weewx.xtypes.get_aggregate("rain", TimeSpan(day_start, timestamp), "sum", manager)
+            rain_today = weewx.units.convert(aggregate, "mm")[0]
+            rain_source = "complete_archive"
     current = {
         "deployment": deployment,
         "schema_version": 1,
@@ -118,6 +123,7 @@ def export(manager, record, output_root):
             "wind_gust_m_s": number(metric.get("windGust")),
             "wind_direction_deg": number(metric.get("windDir")),
             "rain_today_mm": number(rain_today),
+            "rain_today_source": rain_source,
             "solar_w_m2": number(metric.get("radiation")),
             "uv_index": number(metric.get("UV")),
         },

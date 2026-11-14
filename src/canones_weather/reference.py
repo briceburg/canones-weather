@@ -171,7 +171,7 @@ def document(source, rows, start, end):
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "available_through": max(
-            day for day, values in rows.items() if any(value is not None for value in values.values())
+            day for day, values in rows.items() if any(values.get(field) is not None for field in FIELDS.values())
         ).isoformat(),
         "daily": daily,
     }
@@ -231,7 +231,7 @@ def fetch_reference(key, args):
             "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
             "download_url": url,
             "citation": "https://doi.org/10.7289/V5D21VHZ",
-            "notes": "Regional comparison, not Secco Creek weather. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero. ",
+            "notes": "Regional comparison, not Secco Creek weather. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero.",
         }
         if key == "abiquiu":
             source["supplement"] = supplement_abiquiu(text, rows, start, end)
@@ -242,16 +242,21 @@ def fetch_reference(key, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=["daymet", *NOAA_STATIONS, "all"], default="all")
-    parser.add_argument("--latitude", type=float, required=True)
-    parser.add_argument("--longitude", type=float, required=True)
+    parser.add_argument("--latitude", type=float, help="Station latitude for Daymet")
+    parser.add_argument("--longitude", type=float, help="Station longitude for Daymet")
     parser.add_argument("--start-year", type=int, default=2016)
     parser.add_argument("--end-year", type=int, help="Limit to this completed year; otherwise use available data")
     parser.add_argument("--output", type=Path, default=Path("tmp/reference"))
     parser.add_argument("--publish-config", type=Path, help="Publish validated references to this R2 destination")
     args = parser.parse_args()
-    if not -90 <= args.latitude <= 90 or not -180 <= args.longitude <= 180:
+    needs_daymet = args.source in ["daymet", "all"]
+    if needs_daymet and (args.latitude is None or args.longitude is None):
+        parser.error("Daymet requires --latitude and --longitude")
+    if (args.latitude is not None and not -90 <= args.latitude <= 90) or (
+        args.longitude is not None and not -180 <= args.longitude <= 180
+    ):
         parser.error("Invalid coordinates")
-    if not 1980 <= args.start_year <= (args.end_year or date.today().year) or (
+    if not (1980 if needs_daymet else 1) <= args.start_year <= (args.end_year or date.today().year) or (
         args.end_year and args.end_year >= date.today().year
     ):
         parser.error("Invalid year range; an explicit end year must be completed")
