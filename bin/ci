@@ -2,11 +2,12 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
-uv run --locked ruff check
-uv run --locked ruff format --check
+uv run --locked ruff check . bin/generate-sample
+uv run --locked ruff format --check . bin/generate-sample
 uv run --locked --group station pytest -q
 for source in site/shared/assets/*.js; do
   node --input-type=module --check < "$source"
 done
+node --test tests/test_seasons.mjs
 bin/build-site
 bin/check-infra

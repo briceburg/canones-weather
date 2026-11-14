@@ -44,10 +44,8 @@ def history_rows(manager, start, stop, interval):
     if start >= stop:
         return []
     recent = interval == 300
-    rows = {
-        (span.stop if recent else span.start): {"at": iso(span.stop if recent else span.start)}
-        for span in intervalgen(start, stop, interval)
-    }
+    spans = list(intervalgen(start, stop, interval))
+    rows = {(span.stop if recent else span.start): {"at": iso(span.stop if recent else span.start)} for span in spans}
     fields = [
         ("temperature_c", "outTemp", "avg", "degree_C"),
         ("humidity_pct", "outHumidity", "avg", "percent"),
@@ -64,17 +62,19 @@ def history_rows(manager, start, stop, interval):
     for field, observation, aggregate, unit in fields:
         for row in rows.values():
             row[field] = None
-        starts, ends, values = weewx.xtypes.get_series(
-            observation,
-            TimeSpan(start, stop),
-            manager,
-            aggregate_type=None if recent else aggregate,
-            aggregate_interval=interval,
-        )
-        for timestamp, value in zip((ends if recent else starts)[0], values[0]):
-            if timestamp in rows:
-                converted = weewx.units.convert((value, values[1], values[2]), unit)[0]
-                rows[timestamp][field] = number(converted)
+        if recent:
+            _, ends, values = weewx.xtypes.get_series(observation, TimeSpan(start, stop), manager)
+            samples = ((stamp, (value, values[1], values[2])) for stamp, value in zip(ends[0], values[0]))
+        else:
+            # get_series skips the span ending at the archive's very first record.
+            samples = (
+                (span.start, weewx.xtypes.get_aggregate(observation, span, aggregate, manager))
+                for span in spans
+                if aggregate != "sum" or weewx.xtypes.get_aggregate(observation, span, "count", manager)[0]
+            )
+        for timestamp, value in samples:
+            if timestamp in rows and value[0] is not None:
+                rows[timestamp][field] = number(weewx.units.convert(value, unit)[0])
     return list(rows.values())
 
 

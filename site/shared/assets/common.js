@@ -9,10 +9,11 @@ const environment = Object.values(config.environments).find((settings) =>
     (url) => new URL(url).hostname === location.hostname,
   ),
 );
+const localPreview = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 export const settings = {
   ...config,
   default_mode: environment?.default_mode ?? config.default_mode,
-  feed: environment?.data ?? null,
+  feed: environment?.data ?? (localPreview ? config.environments.prod.data : null),
 };
 for (const link of document.querySelectorAll("[data-route]")) {
   const route = link.dataset.route;

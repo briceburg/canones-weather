@@ -15,3 +15,10 @@
 
 References: [pvlib clear-sky models](https://pvlib-python.readthedocs.io/en/stable/user_guide/modeling_topics/clearsky.html),
 [Ecowitt sensor specifications](https://shop.ecowitt.com/collections/wifi-sensor/products/ws90).
+
+## Public API clients
+
+Investigate Cloudflare error 1010 for Python urllib's default user agent on the
+data hostname. Browser requests and identified clients work. Inspect the
+host-specific security configuration before changing shared zone settings; avoid
+broad account permissions merely to address this exception.

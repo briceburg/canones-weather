@@ -24,6 +24,8 @@ def publish(config):
     payloads = {name: (root / f"{name}.json").read_bytes() for name in ["history", "current"]}
     documents = {name: json.loads(body) for name, body in payloads.items()}
     current, history = documents["current"], documents["history"]
+    if not current.get("observed_at") or current["observed_at"] != history.get("through"):
+        raise ValueError("Current and history must describe the same observation interval")
     deployment = current.get("deployment", {})
     if any(document.get("kind") != "live" or document.get("schema_version") != 1 for document in documents.values()):
         raise ValueError("Only version-1 measured observations can be published")

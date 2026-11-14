@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Rebuild deterministic, synthetic fixtures; never reads station data."""
+
+import json
+import math
+from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+ZONE = ZoneInfo("America/Denver")
+THROUGH = datetime(2026, 8, 15, 18, tzinfo=timezone.utc)
+START = date(2024, 1, 1)
+FIELDS = ("temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm", "solar_w_m2")
+
+
+def iso(timestamp):
+    return datetime.fromtimestamp(timestamp, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def observation(timestamp):
+    local = datetime.fromtimestamp(timestamp - 150, ZONE)
+    day = local.timetuple().tm_yday
+    hour = local.hour + local.minute / 60
+    summer = math.cos(2 * math.pi * (day - 200) / 365.2425)
+    daylight = 12 + 2.5 * summer
+    sun = max(0, math.cos(math.pi * (hour - 12) / daylight)) if abs(hour - 12) < daylight / 2 else 0
+    monsoon = (local.month, local.day) >= (6, 15) and local.month <= 9
+    storm = monsoon and day % 7 in (0, 1) and 15 <= hour < 17
+    cloudy = 0.4 if storm else 0.85 + 0.15 * math.sin(day * 0.6) ** 2
+    temperature = 10 + 13 * summer + 7 * math.sin(2 * math.pi * (hour - 9) / 24) + 2 * math.sin(day * 0.4)
+    wind = max(0, 2 + 2 * (local.month in (3, 4, 5)) + 1.5 * math.sin(day * 0.7 + hour * 0.3))
+    row = dict(
+        zip(
+            FIELDS,
+            (
+                temperature,
+                max(10, min(100, 50 - temperature + (25 if storm else 0))),
+                wind,
+                wind + 2 + 2 * math.sin(day + hour) ** 2,
+                0.3 if storm else 0,
+                (750 + 150 * summer) * sun * cloudy,
+            ),
+        )
+    )
+    # Exercise missing days, field-specific coverage, and a recent sensor gap.
+    if local.date() == date(2025, 7, 21):
+        row = {field: None for field in FIELDS}
+    elif local.date() == date(2025, 8, 10):
+        row["rain_mm"] = None
+    if local.date() == date(2026, 8, 15) and 8.5 <= hour < 8.75:
+        row = {field: None for field in FIELDS}
+    return {"at": iso(timestamp), **row}
+
+
+def summary(rows, timestamp):
+    result = {"at": iso(timestamp)}
+    for field in FIELDS:
+        values = [row[field] for row in rows if row[field] is not None]
+        result[field] = (
+            None
+            if not values
+            else (
+                sum(values)
+                if field == "rain_mm"
+                else max(values)
+                if field == "wind_gust_m_s"
+                else sum(values) / len(values)
+            )
+        )
+    temperatures = [row["temperature_c"] for row in rows if row["temperature_c"] is not None]
+    result["temperature_min_c"] = min(temperatures) if temperatures else None
+    result["temperature_max_c"] = max(temperatures) if temperatures else None
+    return result
+
+
+def main():
+    stop = int(THROUGH.timestamp())
+    daily, hourly, recent, today = [], [], [], []
+    current_day = START
+    while current_day <= THROUGH.astimezone(ZONE).date():
+        start = int(datetime.combine(current_day, time(), ZONE).timestamp())
+        end = int(datetime.combine(current_day + timedelta(days=1), time(), ZONE).timestamp())
+        rows = [observation(t) for t in range(start + 300, min(end, stop) + 1, 300)]
+        if end <= stop:
+            daily.append(summary(rows, start))
+        else:
+            today = rows
+        recent.extend(row for row in rows if stop - 86400 < datetime.fromisoformat(row["at"]).timestamp() <= stop)
+        if end > stop - 30 * 86400:
+            for hour in range(max(start, stop // 3600 * 3600 - 30 * 86400), min(end, stop // 3600 * 3600), 3600):
+                observations = [
+                    row for row in rows if hour < datetime.fromisoformat(row["at"]).timestamp() <= hour + 3600
+                ]
+                hourly.append(summary(observations, hour))
+        current_day += timedelta(days=1)
+    latest = recent[-1]
+    current = {
+        "schema_version": 1,
+        "kind": "sample",
+        "station": {"id": "canones", "name": "Secco Creek", "timezone": str(ZONE)},
+        "observed_at": iso(stop),
+        "outdoor": {
+            "source": "Synthetic sample observations",
+            "verified": False,
+            **{field: latest[field] for field in FIELDS if field != "rain_mm"},
+            "wind_direction_deg": 225.0,
+            "rain_today_mm": sum(row["rain_mm"] for row in today)
+            if all(row["rain_mm"] is not None for row in today)
+            else None,
+            "uv_index": latest["solar_w_m2"] / 100,
+        },
+    }
+    history = {
+        "schema_version": 1,
+        "kind": "sample",
+        "station_id": "canones",
+        "through": iso(stop),
+        "recent": recent,
+        "hourly": hourly,
+        "daily": daily,
+    }
+    root = Path(__file__).resolve().parent.parent / "site/canones/data/sample"
+    for name, data in (("current", current), ("history", history)):
+        # Round only serialized values; summaries use unrounded inputs.
+        text = json.dumps(data, separators=(",", ":"), allow_nan=False)
+        document = json.loads(text, parse_float=lambda value: round(float(value), 4))
+        (root / f"{name}.json").write_text(
+            json.dumps(document, indent=2, allow_nan=False) + "\n"
+            if name == "current"
+            else json.dumps(document, separators=(",", ":"), allow_nan=False) + "\n"
+        )
+    print(f"Synthetic sample through {iso(stop)}: {len(recent)} recent, {len(hourly)} hourly, {len(daily)} daily rows")
+
+
+if __name__ == "__main__":
+    main()

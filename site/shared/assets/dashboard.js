@@ -477,10 +477,14 @@ async function load({ refresh = false } = {}) {
           : "The live observation feed is unavailable. No sample readings are substituted. Please try again later.",
         true,
       );
+    else if (history.status !== "fulfilled" && state.history)
+      notice("History refresh failed. Showing the previously received history and its original dates.", true);
     else if (!state.history)
       notice(
         "Current observations are available; the history feed is unavailable.",
       );
+    else if (state.history.through !== state.current.observed_at)
+      notice("Current observations and history have different update times. Each retains its original timestamp; the next refresh will check again.");
     else
       notice(
         state.current.outdoor.verified

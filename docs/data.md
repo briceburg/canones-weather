@@ -35,7 +35,8 @@ production collection or network upload paths.
 Publish `canones/history.json` with `schema_version`, `kind`, `station_id`, and
 `through` (the latest observation represented), plus ascending `recent`, `hourly`, and `daily`
 arrays. [The sample history](../site/canones/data/sample/history.json) illustrates
-the shape with 30 days of hourly data and two years of daily data.
+the shape with 24 hours of five-minute data, 30 days of hourly data, and
+daily data beginning in January 2024.
 
 Each row has `at` and these fields:
 
@@ -70,19 +71,25 @@ independently of these exports.
 
 Serve JSON with `Content-Type: application/json`, public-read CORS, and
 `Cache-Control: public, max-age=60`. Upload history before the current observation
-when publishing a batch. The browser refresh interval is five minutes;
+when publishing a batch. The publisher rejects pairs with different observation
+timestamps, including files read across a local export. Browser requests may
+still straddle two uploads; a notice identifies different update times. The browser refresh interval is five minutes;
 current and history endpoints can fail independently.
 
 Site configuration is in `site/shared/assets/site-config.json`. It selects data
 hosts from the deployed hostname, keeping notprod separate from prod. Local
-previews have no live feed. `default_mode` selects `sample` or `live`; live mode requires valid observation
+previews on localhost or loopback addresses can select the public production feed;
+sample mode remains the default. A Pi snapshot overrides that selection with its
+local capture. `default_mode` selects `sample` or `live`; live mode requires valid observation
 and history feeds. The production hostname selects live mode; local previews select samples.
 Live mode rejects sample envelopes and never
 silently falls back to sample data. An observation older than 15 minutes is labeled
 last-known data. Future timestamps are flagged. If a refresh fails, the previous
 observation retains its original timestamp.
 
-The sample fixture is fixed at June 15, 2026 and contains synthetic values.
+The synthetic sample is fixed at August 15, 2026. Regenerate it with
+`bin/generate-sample`; it includes five-minute, hourly, daily, solar, and seasonal
+data, with deliberate gaps and an ongoing monsoon.
 
 ## Dataset boundaries
 
