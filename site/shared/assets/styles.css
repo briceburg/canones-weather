@@ -323,6 +323,18 @@ p {
 .station-header p {
   margin: 0;
 }
+.station-header .station-clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+}
+.station-clock time {
+  font-size: clamp(1.2rem, 2.5vw, 1.55rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
 .mode-controls {
   display: flex;
   flex-direction: column;

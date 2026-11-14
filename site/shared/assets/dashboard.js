@@ -18,6 +18,21 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
   timeZoneName: "short",
 });
+const clockFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Denver",
+  hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short",
+});
+const clockDateFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Denver", weekday: "long", month: "long", day: "numeric",
+});
+function renderClock() {
+  const now = new Date();
+  $("station-clock").dateTime = now.toISOString();
+  $("station-clock").textContent = clockFormat.format(now);
+  $("station-date").textContent = clockDateFormat.format(now);
+}
+renderClock();
+setInterval(renderClock, 1000);
 const chart = window.echarts.init($("chart"), null, { renderer: "svg" });
 const state = {
   mode: settings.default_mode,
