@@ -10,7 +10,6 @@
           - weather_publisher.bucket == 'canones-weather'
           - weather_publisher.endpoint_url is match('^https://[a-f0-9]+\.r2\.cloudflarestorage\.com$')
           - weather_publisher.key_prefix == 'canones/'
-          - weather_publisher_credentials_file is defined
     - name: Create publisher configuration directory
       ansible.builtin.file:
         path: /etc/canones-weather
@@ -20,7 +19,7 @@
         mode: '0750'
     - name: Install bucket-scoped publisher credentials
       ansible.builtin.copy:
-        src: "{{ weather_publisher_credentials_file }}"
+        src: ../../tmp/r2-publisher.env
         dest: /etc/canones-weather/r2.env
         owner: root
         group: root

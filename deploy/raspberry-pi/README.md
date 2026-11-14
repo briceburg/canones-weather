@@ -96,15 +96,16 @@ JSON and website assets. Do not copy an actively written database file.
 ## Publish to R2
 
 Create an R2 Object Read & Write credential restricted to `canones-weather`.
-Save these settings in a private environment file outside the repository:
+Save these settings in `tmp/r2-publisher.env` with mode `0600`; `tmp/` is
+ignored by Git:
 
 ```sh
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 ```
 
-Set `WEATHER_R2_CREDENTIALS_FILE` in `.env` to that file's local path. Save the
-OpenTofu destination output and deploy the publisher:
+Save the OpenTofu destination output to the separate, non-secret settings file
+and deploy the publisher:
 
 ```sh
 tofu -chdir=opentofu/environments/prod output -json publisher > tmp/publisher.json

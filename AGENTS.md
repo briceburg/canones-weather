@@ -35,6 +35,9 @@
   configured email. For this repo use `490144+briceburg@users.noreply.github.com`
   with the public name `briceburg`, supplying Git's `-c user.name` and
   `-c user.email` options when committing if local settings differ.
+- Keep bucket-scoped publishing credentials at `tmp/r2-publisher.env` (mode
+  `0600`) and non-secret OpenTofu destination output at `tmp/publisher.json`.
+  Use these fixed ignored paths rather than configuring a secret-file path in `.env`.
 - Never commit credentials, captures, state, saved plans, or generated output.
 - Test environments use separate state, buckets, projects, and publisher credentials.
 - Weather-network uploads must use verified WS90 outdoor observations. Additional

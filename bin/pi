@@ -70,7 +70,7 @@ PY
     exit ;;
   publish)
     playbook=publish.yml
-    : "${WEATHER_R2_CREDENTIALS_FILE:?Set WEATHER_R2_CREDENTIALS_FILE}"
+    [[ -f tmp/r2-publisher.env ]] || { printf 'Create private tmp/r2-publisher.env with the bucket-scoped credentials first.\n' >&2; exit 1; }
     [[ -f tmp/publisher.json ]] || { printf 'Save the OpenTofu publisher output to tmp/publisher.json first.\n' >&2; exit 1; }
     ;;
   preflight) playbook=preflight.yml ;;
@@ -88,7 +88,6 @@ values = {
     'weather_elevation_m': os.environ.get('WEATHER_ELEVATION_M', ''),
 }
 if sys.argv[2] == 'publish':
-    values['weather_publisher_credentials_file'] = str(Path(os.environ['WEATHER_R2_CREDENTIALS_FILE']).expanduser().resolve())
     values['weather_publisher'] = json.loads(Path('tmp/publisher.json').read_text())
 Path(sys.argv[1]).write_text(json.dumps(values))
 PY
