@@ -29,6 +29,7 @@ def test_archive_export_preserves_units_gaps_and_unverified_provenance(tmp_path)
     current = json.loads((tmp_path / "public/current.json").read_text())
     history = json.loads((tmp_path / "public/history.json").read_text())
     assert current["deployment"]["phase"] == "pilot"
+    assert history["record_started_at"] == time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(records[0]["dateTime"]))
     assert current["deployment"]["dataset_id"] == history["deployment"]["dataset_id"]
     assert current["kind"] == "live"
     assert current["outdoor"]["verified"] is False

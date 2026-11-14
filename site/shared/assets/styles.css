@@ -805,3 +805,17 @@ p {
   max-width: none;
   margin: 0;
 }
+
+.control-picker {
+  border: 1px solid #35433e;
+  border-radius: 8px;
+  margin: 14px 0;
+  padding: 10px 14px;
+}
+.control-picker legend { font-size: .8rem; color: #a1b0ab; padding: 0 6px; }
+.control-picker label { display: inline-flex; align-items: center; gap: 7px; margin: 4px 18px 4px 0; font-size: .85rem; }
+.control-picker input { accent-color: #e4b17b; }
+.control-picker p { margin: 8px 0; color: #a1b0ab; }
+
+.control-picker input[data-control="daymet"] { accent-color: #b8a3cf; }
+.control-picker input[data-control="abiquiu"] { accent-color: #86b4cb; }

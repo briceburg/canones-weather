@@ -5,3 +5,7 @@
   Cache-Control: no-transform
 /index.html
   Cache-Control: no-transform
+https://weather-notprod.iceburg.net/*
+  X-Robots-Tag: noindex
+https://canones.weather-notprod.iceburg.net/*
+  X-Robots-Tag: noindex

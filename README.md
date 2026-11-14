@@ -14,7 +14,7 @@ the years—with a public dashboard and reusable data.
 - Efficient publishing from Ecowitt hardware and a Raspberry Pi, using local
   collection, Cloudflare Pages, and R2 storage designed to fit free-tier allowances.
 - A responsive, dark-only dashboard with interactive weather charts, selectable
-  units, and views spanning a day to years of history.
+  units, seasonal views, and separately attributed Daymet/NOAA historical controls.
 - Reusable JSON observations with timestamps and sensor sources, decoupling
   data collection from the website.
 
@@ -39,6 +39,9 @@ python3 -m http.server 8000 --directory dist
 Open the [hub](http://localhost:8000/hub/) or
 [station dashboard](http://localhost:8000/canones/). No gateway or cloud account
 is needed to explore the sample site.
+
+See [historical controls and source methods](docs/reference-data.md) or
+[publishing and discovery](docs/publishing.md) for data provenance and contribution channels.
 
 ## Have an Ecowitt gateway?
 

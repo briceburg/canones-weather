@@ -10,8 +10,65 @@
       content="Weather at Secco Creek, Cañones, New Mexico. Explore current conditions and weather history."
     />
     <title>Secco Creek — Iceburg Weather</title>
+    <link rel="canonical" href="https://canones.weather.iceburg.net/" />
     <link rel="icon" href="./assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./assets/styles.css" />
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Dataset",
+  "@id": "https://canones.weather.iceburg.net/#observations",
+  "name": "Secco Creek weather observations, Cañones, New Mexico",
+  "description": "Public local weather observations with timestamps, sensor provenance, and pilot notices. Historical NOAA observations and Daymet grid estimates are separate comparison datasets, not Secco Creek measurements.",
+  "url": "https://canones.weather.iceburg.net/",
+  "isAccessibleForFree": true,
+  "creator": {
+    "@type": "Organization",
+    "name": "Iceburg",
+    "url": "https://iceburg.net"
+  },
+  "keywords": [
+    "Canones",
+    "Cañones",
+    "Secco Creek",
+    "New Mexico",
+    "weather station",
+    "weather observations"
+  ],
+  "spatialCoverage": {
+    "@type": "Place",
+    "name": "Secco Creek, Cañones, New Mexico",
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 36.150028,
+      "longitude": -106.4455
+    }
+  },
+  "variableMeasured": [
+    "Temperature",
+    "Relative humidity",
+    "Wind speed",
+    "Wind gust",
+    "Rainfall",
+    "Solar irradiance",
+    "UV index"
+  ],
+  "distribution": [
+    {
+      "@type": "DataDownload",
+      "name": "Current local observations",
+      "encodingFormat": "application/json",
+      "contentUrl": "https://data.weather.iceburg.net/canones/current.json"
+    },
+    {
+      "@type": "DataDownload",
+      "name": "Local observation history",
+      "encodingFormat": "application/json",
+      "contentUrl": "https://data.weather.iceburg.net/canones/history.json"
+    }
+  ]
+}
+    </script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -195,6 +252,13 @@
               </button>
             </div>
           </div>
+          <fieldset class="control-picker">
+            <legend>Compare historical controls</legend>
+            <label><input type="checkbox" data-control="daymet" /> Daymet · Cañones grid estimate</label>
+            <label><input type="checkbox" data-control="abiquiu" /> Abiquiu Dam · NOAA observations</label>
+            <p id="control-note" class="small" aria-live="polite">Controls compare daily temperature ranges and precipitation. Each source stays separate.</p>
+            <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
+          </fieldset>
           <div
             id="chart"
             class="chart"
@@ -239,9 +303,10 @@
           <div>
             <h3>Weather, shared openly.</h3>
             <p>
-              Explore the weather over time, or download the observations to use
-              in your own projects. Recorded here, shared with you.
+              Explore local observations over time, or compare the separately
+              labeled Daymet and NOAA controls. Recorded here, shared with you.
             </p>
+            <p><a class="small" href="https://data.weather.iceburg.net/canones/history.json">Public station history · JSON ↗</a></p>
             <p id="provenance">
               Sample values only. Live sensor mapping is unverified.
             </p>

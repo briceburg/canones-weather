@@ -24,6 +24,7 @@ export function seasonalRows(daily, monsoon = false) {
     const stop = monsoon ? Date.UTC(year, 9, 1) : Date.UTC(year, season * 3 + 5, 1);
     groups.set(k, {
       label: monsoon ? `Monsoon ${year}` : `${["Spring", "Summer", "Autumn", "Winter"][season]} ${year}${season === 3 ? `–${String(year + 1).slice(-2)}` : ""}`,
+      start,
       expectedDays: (stop - start) / 86400000,
       values: Object.fromEntries(Object.keys(fields).map((field) => [field, []])),
     });
@@ -35,8 +36,8 @@ export function seasonalRows(daily, monsoon = false) {
       if (numeric(date.row[field])) group.values[field].push(date.row[field]);
     }
   }
-  return [...groups.values()].map(({label, expectedDays, values}) => {
-    const result = {label, expectedDays, coverage: {}};
+  return [...groups.values()].map(({label, start, expectedDays, values}) => {
+    const result = {label, start, expectedDays, coverage: {}};
     for (const [field, operation] of Object.entries(fields)) {
       const data = values[field];
       result.coverage[field] = data.length;

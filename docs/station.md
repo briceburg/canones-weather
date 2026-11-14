@@ -55,3 +55,8 @@ retrieval before relying on SD-card recovery.
    timestamps. Remove the pilot notice only with verified sensor provenance.
 5. Configure Wunderground/CWOP station identities and credentials separately,
    and inspect the actual outbound fields before enabling submissions.
+
+After activation, verify CWOP/MADIS station lookup and quality-control results,
+and add the assigned public station links to this document. Follow
+[publishing and discovery](publishing.md) for contribution and indexing details;
+CWOP distribution is separate from enrollment in GHCN-Daily.

@@ -54,3 +54,11 @@ The sample generator uses only Python's standard library.
 The shared Pages headers require asset revalidation. HTML entry points additionally
 use `no-transform` to prevent automatic analytics injection; scripts and styles
 remain eligible for compression.
+
+## Historical controls
+
+In Live mode, select Daymet or Abiquiu Dam to overlay separately attributed daily
+controls. These bundled reference files do not change local observations or the
+station archive. See [reference data](../docs/reference-data.md) for refresh and
+comparison details, and [publishing/discovery](../docs/publishing.md) for the
+production sitemap, Dataset metadata, and CWOP commissioning requirements.
