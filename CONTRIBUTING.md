@@ -41,3 +41,11 @@ project's production configuration as part of an ordinary contribution.
 
 `bin/ci` runs all repository checks and requires the tools for each area above.
 See [AGENTS.md](AGENTS.md) for repository conventions and the testing policy.
+
+## Releases
+
+Maintainers run **Actions → Create release → Run workflow**, selecting `main` and
+providing a nickname. The workflow validates that commit, then publishes a GitHub
+release with generated notes. Tags use the UTC date, `vYYYY.MM.DD-N`: the first
+release of a day is `-0`, and later releases increment the largest existing suffix.
+The nickname appears in the release title. No additional publishing token is needed.
