@@ -41,6 +41,8 @@ const referenceSources = {
   albuquerque: {name: "Albuquerque airport", color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
   madrid: {name: "Madrid 1.9 SE", color: "#a1c6ac", line: "solid", rainOnly: true},
 };
+// Maxima first, averages/totals next (default), minima last.
+const tooltipOrder = {temperature_max_c: 0, wind_gust_m_s: 0, temperature_min_c: 2};
 const state = {
   mode: settings.default_mode,
   metric: "temperature",
@@ -406,7 +408,7 @@ function renderChart() {
   const unit = units()[state.metric];
   const seriesMeta = new Map();
   const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
-    seriesMeta.set(name, {rows: dataRows, key});
+    seriesMeta.set(name, {rows: dataRows, key, order: tooltipOrder[key] ?? 1});
     return {
       name,
       type: state.metric === "rain" ? "bar" : "line",
@@ -496,9 +498,8 @@ function renderChart() {
         textStyle: { color: "#e8ebe4" },
         formatter: (entries) => {
           const title = seasonal ? rows[entries[0].value[0]].label : (daily ? dateFormat : timeFormat).format(new Date(entries[0].value[0]));
-          const order = {temperature_max_c: 0, temperature_c: 1, temperature_min_c: 2};
-          const ordered = state.metric === "temperature" ? [...entries].sort((a, b) =>
-            order[seriesMeta.get(a.seriesName).key] - order[seriesMeta.get(b.seriesName).key]) : entries;
+          const ordered = [...entries].sort((a, b) =>
+            seriesMeta.get(a.seriesName).order - seriesMeta.get(b.seriesName).order);
           return `${title}<br>` + ordered.map((entry) => {
             const meta = seriesMeta.get(entry.seriesName);
             const row = meta.rows[entry.dataIndex];
