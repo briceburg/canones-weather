@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+
+: "${WEATHER_PI_SSH:?Set WEATHER_PI_SSH to user@host}"
+action=${1:-}
+shift || true
+mkdir -p tmp
+ssh_options=(-F /dev/null -o BatchMode=yes -o "UserKnownHostsFile=$PWD/tmp/ssh_known_hosts" -o StrictHostKeyChecking=accept-new)
+if [[ -S tmp/pi-ssh.sock ]]; then
+  ssh_options+=(-o "ControlPath=$PWD/tmp/pi-ssh.sock")
+fi
+case "$action" in
+  status)
+    ssh "${ssh_options[@]}" "$WEATHER_PI_SSH" \
+      'systemctl is-active canones-weather-pilot radiopad-player; sudo -n journalctl -u canones-weather-pilot -n 20 --no-pager'
+    exit ;;
+  backup)
+    backup_file=$(mktemp "$PWD/tmp/pilot-backup.XXXXXX.sdb")
+    trap 'rm -f -- "$backup_file"' EXIT
+    ssh "${ssh_options[@]}" "$WEATHER_PI_SSH" 'sudo -n python3 -' > "$backup_file" <<'PYREMOTE'
+import os, sqlite3, sys, tempfile
+root = '/var/lib/canones-weather/pilot'
+fd, path = tempfile.mkstemp(dir=root, suffix='.sdb')
+os.close(fd)
+try:
+    with sqlite3.connect(f'file:{root}/archive/weewx.sdb?mode=ro', uri=True) as source:
+        with sqlite3.connect(path) as destination:
+            source.backup(destination)
+    with open(path, 'rb') as stream:
+        while chunk := stream.read(1048576):
+            sys.stdout.buffer.write(chunk)
+finally:
+    os.unlink(path)
+PYREMOTE
+    python3 - "$backup_file" <<'PY'
+import sqlite3, sys
+with sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True) as db:
+    if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+        raise SystemExit('Archive backup failed integrity check')
+PY
+    destination="tmp/pilot-archive-$(date -u +%Y%m%dT%H%M%SZ).sdb"
+    mv "$backup_file" "$destination"
+    printf 'Consistent archive backup saved to %s\n' "$destination"
+    exit ;;
+  snapshot)
+    [[ -f dist/canones/assets/site-config.json ]] || { printf 'Run bin/build-site first.\n' >&2; exit 1; }
+    mkdir -p dist/canones/data/pilot
+    for name in history current; do
+      ssh "${ssh_options[@]}" "$WEATHER_PI_SSH" \
+        "sudo -n cat /var/lib/canones-weather/pilot/public/$name.json" > "tmp/$name.json"
+      python3 -m json.tool "tmp/$name.json" > /dev/null
+    done
+    mv tmp/history.json tmp/current.json dist/canones/data/pilot/
+    python3 - <<'PY'
+import json
+from pathlib import Path
+p = Path('dist/canones/assets/site-config.json')
+config = json.loads(p.read_text())
+for host in ['localhost', '127.0.0.1']:
+    config['environments'][host] = {
+        'hub': f'http://{host}:8000/hub/',
+        'station': f'http://{host}:8000/canones/',
+        'data': '/canones/data/pilot/',
+    }
+config['default_mode'] = 'live'
+p.write_text(json.dumps(config, indent=2) + '\n')
+PY
+    printf 'Pilot snapshot ready at http://localhost:8000/canones/\n'
+    exit ;;
+  publish)
+    playbook=publish.yml
+    : "${WEATHER_R2_CREDENTIALS_FILE:?Set WEATHER_R2_CREDENTIALS_FILE}"
+    [[ -f tmp/publisher.json ]] || { printf 'Save the OpenTofu publisher output to tmp/publisher.json first.\n' >&2; exit 1; }
+    ;;
+  preflight) playbook=preflight.yml ;;
+  deploy) playbook=playbook.yml; : "${WEATHER_ELEVATION_M:?Set WEATHER_ELEVATION_M}" ;;
+  *) printf 'Usage: bin/pi {preflight|deploy|publish|status|snapshot|backup} [ansible-playbook options]\n' >&2; exit 2 ;;
+esac
+: "${WEATHER_GATEWAY_URL:?Set WEATHER_GATEWAY_URL}"
+variables=$(mktemp "$PWD/tmp/pi-vars.XXXXXX.json")
+trap 'rm -f -- "$variables"' EXIT
+python3 - "$variables" "$action" <<'PY'
+import json, os, sys
+from pathlib import Path
+values = {
+    'weather_gateway': os.environ['WEATHER_GATEWAY_URL'],
+    'weather_elevation_m': os.environ.get('WEATHER_ELEVATION_M', ''),
+}
+if sys.argv[2] == 'publish':
+    values['weather_publisher_credentials_file'] = str(Path(os.environ['WEATHER_R2_CREDENTIALS_FILE']).expanduser().resolve())
+    values['weather_publisher'] = json.loads(Path('tmp/publisher.json').read_text())
+Path(sys.argv[1]).write_text(json.dumps(values))
+PY
+printf -v ssh_args '%q ' "${ssh_options[@]}"
+ansible-playbook -i "${WEATHER_PI_SSH##*@}," -u "${WEATHER_PI_SSH%@*}" \
+  --ssh-common-args "$ssh_args" -e "@$variables" "deploy/raspberry-pi/$playbook" "$@"

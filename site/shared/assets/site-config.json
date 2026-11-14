@@ -1,0 +1,17 @@
+{
+  "default_mode": "sample",
+  "stale_after_minutes": 15,
+  "environments": {
+    "prod": {
+      "hub": "https://weather.iceburg.net",
+      "station": "https://canones.weather.iceburg.net",
+      "data": "https://data.weather.iceburg.net/canones/",
+      "default_mode": "live"
+    },
+    "notprod": {
+      "hub": "https://weather-notprod.iceburg.net",
+      "station": "https://canones.weather-notprod.iceburg.net",
+      "data": "https://data.weather-notprod.iceburg.net/canones/"
+    }
+  }
+}

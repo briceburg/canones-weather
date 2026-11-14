@@ -1,0 +1,19 @@
+[Unit]
+Description=Publish Canones pilot observations to R2
+Wants=network-online.target
+After=network-online.target canones-weather-pilot.service
+
+[Service]
+Type=oneshot
+User=canones-weather
+Group=canones-weather
+EnvironmentFile=/etc/canones-weather/r2.env
+Environment=AWS_EC2_METADATA_DISABLED=true
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/canones-weather/.venv/bin/python -m canones_weather.publish /etc/canones-weather/publisher.json
+TimeoutStartSec=180
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077

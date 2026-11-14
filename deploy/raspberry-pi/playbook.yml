@@ -1,0 +1,153 @@
+---
+- import_playbook: preflight.yml
+
+- name: Deploy the isolated weather pilot
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    weather_install_root: /opt/canones-weather
+    weather_state_root: /var/lib/canones-weather/pilot
+    weather_driver_revision: 6876b2ecbab88f825dde1b0b7c5874cb5fd3c25e
+    weather_driver_checksum: sha256:b9a29c15e11d7aeb16038a044fde49ad9586b97bb0837e2e43480e99f02521c3
+  pre_tasks:
+    - name: Validate collector configuration
+      ansible.builtin.assert:
+        that:
+          - weather_gateway is match('^http://[^/]+/?$')
+          - weather_elevation_m is defined
+          - weather_elevation_m | string is match('^-?[0-9]+(?:\.[0-9]+)?$')
+          - weather_elevation_m | float >= -500
+          - weather_elevation_m | float <= 9000
+        fail_msg: The collector needs an HTTP gateway origin and ground elevation in metres.
+    - name: Check the installed uv executable
+      ansible.builtin.command: /usr/local/bin/uv --version
+      changed_when: false
+    - name: Record radio-pad service state
+      ansible.builtin.command: systemctl show radiopad-player --property=ActiveState --property=MainPID --property=ActiveEnterTimestampMonotonic --value
+      register: weather_radio_before
+      changed_when: false
+  tasks:
+    - name: Create the weather service account
+      ansible.builtin.user:
+        name: canones-weather
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+    - name: Create root-owned application directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - "{{ weather_install_root }}"
+        - "{{ weather_install_root }}/driver/user"
+        - "{{ weather_install_root }}/src/canones_weather"
+    - name: Copy the Python project and lock file
+      ansible.builtin.copy:
+        src: "../../{{ item }}"
+        dest: "{{ weather_install_root }}/{{ item }}"
+        owner: root
+        group: root
+        mode: preserve
+      loop:
+        - pyproject.toml
+        - uv.lock
+      notify: Restart weather pilot
+    - name: Copy application source
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ weather_install_root }}/src/canones_weather/{{ item | basename }}"
+        owner: root
+        group: root
+        mode: '0644'
+      with_fileglob:
+        - "{{ playbook_dir }}/../../src/canones_weather/*.py"
+      notify: Restart weather pilot
+    - name: Remove copied bytecode caches
+      ansible.builtin.file:
+        path: "{{ weather_install_root }}/src/canones_weather/__pycache__"
+        state: absent
+    - name: Install the locked station environment
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/uv
+          - sync
+          - --locked
+          - --no-dev
+          - --group
+          - station
+          - --python
+          - /usr/bin/python3
+        chdir: "{{ weather_install_root }}"
+      register: weather_sync
+      changed_when: "'Installed ' in weather_sync.stderr or 'Uninstalled ' in weather_sync.stderr"
+      notify: Restart weather pilot
+    - name: Install the pinned Ecowitt driver
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/weewx-contrib/weewx-ecowitt_local_http/{{ weather_driver_revision }}/bin/user/ecowitt_http.py"
+        dest: "{{ weather_install_root }}/driver/user/ecowitt_http.py"
+        checksum: "{{ weather_driver_checksum }}"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart weather pilot
+    - name: Create driver namespace files
+      ansible.builtin.copy:
+        content: ''
+        dest: "{{ weather_install_root }}/driver/user/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - __init__.py
+        - extensions.py
+    - name: Create private pilot data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: canones-weather
+        group: canones-weather
+        mode: '0750'
+      loop:
+        - /var/lib/canones-weather
+        - "{{ weather_state_root }}"
+        - "{{ weather_state_root }}/archive"
+        - "{{ weather_state_root }}/public"
+    - name: Configure the weather pilot
+      ansible.builtin.template:
+        src: weewx.conf.j2
+        dest: "{{ weather_state_root }}/weewx.conf"
+        owner: root
+        group: canones-weather
+        mode: '0640'
+      notify: Restart weather pilot
+    - name: Install the weather pilot unit
+      ansible.builtin.template:
+        src: canones-weather-pilot.service.j2
+        dest: /etc/systemd/system/canones-weather-pilot.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart weather pilot
+    - name: Enable and start the weather pilot
+      ansible.builtin.systemd_service:
+        name: canones-weather-pilot
+        daemon_reload: true
+        enabled: true
+        state: started
+    - name: Apply weather changes
+      ansible.builtin.meta: flush_handlers
+    - name: Confirm radio-pad state is unchanged
+      ansible.builtin.command: systemctl show radiopad-player --property=ActiveState --property=MainPID --property=ActiveEnterTimestampMonotonic --value
+      register: weather_radio_after
+      changed_when: false
+      failed_when: weather_radio_after.stdout != weather_radio_before.stdout
+  handlers:
+    - name: Restart weather pilot
+      ansible.builtin.systemd_service:
+        name: canones-weather-pilot
+        daemon_reload: true
+        state: restarted

@@ -1,0 +1,5 @@
+allowed_account_ids = ["022092573277"]
+bucket = "iceburg-infra-opentofu-state-prod"
+key = "terraform/canones-weather/prod/terraform.tfstate"
+profile = "briceburg-admin"
+region = "us-east-2"

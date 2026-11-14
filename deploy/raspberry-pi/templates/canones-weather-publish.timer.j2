@@ -1,0 +1,11 @@
+[Unit]
+Description=Publish weather JSON every five minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/5:45
+AccuracySec=5
+Persistent=true
+Unit=canones-weather-publish.service
+
+[Install]
+WantedBy=timers.target

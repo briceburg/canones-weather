@@ -1,0 +1,124 @@
+# Raspberry Pi pilot
+
+The Ansible deployment runs WeeWX 5.5.2 with a pinned Ecowitt HTTP driver, isolated
+from radio-pad. The service polls every 20 seconds, archives every five minutes,
+and exports local dashboard JSON after each archive record.
+
+## Configure and deploy
+
+With Ansible installed, set these values in the ignored `.env`:
+
+- `WEATHER_PI_SSH`: the administrator's SSH target, in `user@host` form.
+- `WEATHER_GATEWAY_URL`: the gateway HTTP origin. The pinned driver uses HTTP.
+- `WEATHER_ELEVATION_M`: ground elevation in metres above sea level.
+
+From repository root:
+
+```sh
+set -a
+source .env
+set +a
+bin/pi preflight
+bin/pi deploy
+bin/pi status
+```
+
+Preflight reads host facts and gateway data. Deployment needs passwordless sudo
+and an installed `/usr/local/bin/uv`. It creates the `canones-weather` service
+account, syncs the locked `station` dependency group, and enables
+`canones-weather-pilot.service`. It checks that radio-pad's service state, main
+PID, and activation time are unchanged.
+
+| Path | Contents |
+| --- | --- |
+| `/opt/canones-weather` | Root-owned application, virtualenv, and pinned driver |
+| `/var/lib/canones-weather/pilot/weewx.conf` | Collector configuration |
+| `/var/lib/canones-weather/pilot/archive/weewx.sdb` | Pilot archive and daily summaries |
+| `/var/lib/canones-weather/pilot/public/` | `current.json` and `history.json` |
+
+The pilot archive is separate from verified production history. Its primary
+outdoor temperature/humidity may be supplied by WN32; JSON identifies the source
+as unverified. No REST upload services or station registration are loaded. The
+collector exports local files. A separate publisher uses bucket-scoped R2
+credentials; weather-network uploads remain disabled.
+
+The [driver](https://github.com/weewx-contrib/weewx-ecowitt_local_http) is pinned
+by commit and SHA-256. Rain uses the WS90 piezo year-counter delta, and solar
+radiation maps to the gateway's light field. The driver normalizes that field
+to lux; the collector reverses its 126.7 conversion to restore W/m². Verify units and mapping against the
+raw gateway response. See [station requirements](../../docs/station.md).
+
+## Inspect the pilot in the local dashboard
+
+```sh
+bin/build-site
+bin/pi snapshot
+python3 -m http.server 8000 --directory dist
+```
+
+Open `http://localhost:8000/canones/`. Snapshot copies the Pi's JSON into the ignored
+build output and selects it as the local feed. It retains the observation's time
+and unverified source. Repeat `bin/pi snapshot` to refresh; this is a snapshot,
+not a continuous connection. `bin/build-site` restores the sample preview.
+
+## SSH authentication
+
+The commands use your SSH agent or an existing shared connection. To authenticate
+with a password in your own terminal and share a connection for 30 minutes:
+
+```sh
+mkdir -p tmp
+ssh -F /dev/null -M -S "$PWD/tmp/pi-ssh.sock" \
+  -o UserKnownHostsFile="$PWD/tmp/ssh_known_hosts" \
+  -o PubkeyAuthentication=no -o ControlPersist=30m -fN "$WEATHER_PI_SSH"
+```
+
+`bin/pi` reuses this socket. Host keys are pinned in ignored `tmp/ssh_known_hosts`.
+Close the connection with:
+
+```sh
+ssh -F /dev/null -S "$PWD/tmp/pi-ssh.sock" -O exit "$WEATHER_PI_SSH"
+```
+
+## Stop or recover
+
+```sh
+ssh -F /dev/null -S "$PWD/tmp/pi-ssh.sock" "$WEATHER_PI_SSH" \
+  sudo systemctl disable --now canones-weather-pilot
+```
+
+Stopping the collector preserves its archive. `bin/pi backup` uses SQLite's online
+backup API, downloads a consistent snapshot into ignored `tmp/`, and checks its
+integrity. Run it from another machine to keep a copy off the Pi; it is an
+operator command, not a scheduled backup. Keep these files separately from public
+JSON and website assets. Do not copy an actively written database file.
+
+## Publish to R2
+
+Create an R2 Object Read & Write credential restricted to `canones-weather`.
+Save these settings in a private environment file outside the repository:
+
+```sh
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+Set `WEATHER_R2_CREDENTIALS_FILE` in `.env` to that file's local path. Save the
+OpenTofu destination output and deploy the publisher:
+
+```sh
+tofu -chdir=opentofu/environments/prod output -json publisher > tmp/publisher.json
+bin/pi deploy
+bin/pi publish
+```
+
+The publisher credentials are installed root-only at `/etc/canones-weather/r2.env`
+and passed to an isolated service. `canones-weather-publish.timer` uploads history
+then current JSON every five minutes, preserving the observation time and dataset
+notice. It rejects samples, mismatched datasets, and unverified production data.
+The broad Cloudflare infrastructure token belongs only on the deployment host.
+
+Inspect publishing with `systemctl status canones-weather-publish.timer` and
+`journalctl -u canones-weather-publish.service` on the Pi. Stop public updates with
+`sudo systemctl disable --now canones-weather-publish.timer`; local collection
+continues independently.

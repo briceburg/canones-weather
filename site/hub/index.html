@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#101819" />
+    <meta
+      name="description"
+      content="Local weather, shared openly. Observations from Secco Creek in Cañones, New Mexico."
+    />
+    <title>Iceburg Weather — Weather, close to home.</title>
+    <link rel="icon" href="./assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./assets/styles.css" />
+    <script type="module" src="./assets/common.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="shell">
+      <header class="header">
+        <a class="brand" href="./" aria-label="Iceburg Weather home"
+          ><img src="./assets/mark.svg" alt="" width="38" height="38" />iceburg
+          <span>/ weather</span></a
+        >
+        <nav aria-label="Main">
+          <a href="#stations">Stations</a
+          ><a href="#about" class="desktop">About</a
+          ><a href="https://github.com/briceburg/canones-weather"
+            >Open source <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+      </header>
+      <main id="main">
+        <section class="hero" aria-labelledby="intro-title">
+          <div>
+            <p class="eyebrow">A little closer to the weather</p>
+            <h1 id="intro-title">Weather,<br />close to home.</h1>
+            <p class="intro">
+              Local observations. Changing seasons. A small window into the
+              places we call home.
+            </p>
+            <a class="button primary" href="#stations"
+              >Explore our stations
+              <span class="arrow" aria-hidden="true">↘</span></a
+            >
+          </div>
+          <svg
+            class="landscape"
+            viewBox="0 0 480 400"
+            role="img"
+            aria-label="An illustration of the sun above layered mountain ridges"
+          >
+            <defs>
+              <linearGradient id="ridge" x2="0" y2="1">
+                <stop stop-color="#35473f" />
+                <stop offset="1" stop-color="#142020" />
+              </linearGradient>
+            </defs>
+            <circle cx="302" cy="115" r="48" fill="#e4b17b" opacity=".88" />
+            <circle
+              cx="302"
+              cy="115"
+              r="68"
+              fill="none"
+              stroke="#e4b17b"
+              opacity=".12"
+            />
+            <path
+              d="m10 280 90-104 62 59 91-102 69 83 60-36 88 104v92H10Z"
+              fill="#243630"
+            />
+            <path
+              d="m10 310 74-39 73 36 118-95 77 64 118-25v125H10Z"
+              fill="url(#ridge)"
+            />
+            <path
+              d="m10 344 110-18 91 17 133-31 126 28v36H10Z"
+              fill="#172425"
+            />
+            <g fill="none" stroke="#79947f" stroke-width="1" opacity=".28">
+              <path d="m10 305 74-39 73 36 118-95 77 64 118-25" />
+              <path d="m10 321 74-39 73 36 118-95 77 64 118-25" />
+              <path d="m10 337 74-39 73 36 118-95 77 64 118-25" />
+              <path d="m10 353 74-39 73 36 118-95 77 64 118-25" />
+            </g>
+            <path d="M10 376h460" stroke="#3a4c43" />
+            <g
+              fill="#778a80"
+              font-family="monospace"
+              font-size="10"
+              letter-spacing="3"
+            >
+              <text x="12" y="397">NORTHERN NEW MEXICO</text>
+              <text x="412" y="397">36° N</text>
+            </g>
+          </svg>
+        </section>
+        <section
+          class="stations"
+          id="stations"
+          aria-labelledby="stations-title"
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Our corner of the world</p>
+              <h2 id="stations-title">On the ground.</h2>
+            </div>
+            <span class="muted small"
+              >One station. A view through the seasons.</span
+            >
+          </div>
+          <article class="station-card">
+            <div class="station-copy">
+              <p class="eyebrow">Cañones · New Mexico</p>
+              <h3>Secco Creek</h3>
+              <p class="muted">
+                Follow the weather through the day and the seasons, from a small
+                clearing in northern New Mexico.
+              </p>
+              <p class="small muted">
+                Pilot measurements: sensor placement is provisional. Temperature
+                and humidity sources are unverified.
+              </p>
+              <div class="meta">
+                <span>GW3000 + WS90</span><span>Mountain Time</span
+                ><span class="tag sample">Pilot station</span>
+              </div>
+              <a
+                class="button"
+                href="https://canones.weather.iceburg.net"
+                data-route="station"
+                >Explore the station
+                <span class="arrow" aria-hidden="true">↗</span></a
+              >
+              <a
+                class="station-map small"
+                href="https://www.openstreetmap.org/?mlat=36.150028&amp;mlon=-106.445500#map=15/36.150028/-106.445500"
+                aria-label="View Secco Creek station on OpenStreetMap"
+                >View on map ↗</a
+              >
+            </div>
+            <div class="station-art" aria-hidden="true">
+              <svg viewBox="0 0 360 220" class="landscape">
+                <circle cx="268" cy="68" r="25" fill="#d0a374" />
+                <path
+                  d="m0 145 75-85 67 67 54-46 78 69 42-26 44 25v71H0Z"
+                  fill="#30463c"
+                />
+                <path
+                  d="m0 183 84-47 63 30 102-53 111 60v47H0Z"
+                  fill="#23382f"
+                />
+                <path d="m0 204 118-35 87 30 155-24v45H0Z" fill="#1b2c28" />
+                <g stroke="#a1c6ac" stroke-width="2" fill="none">
+                  <path d="M125 181V94m-14 7h29m-19-7h9v-7h-9z" />
+                  <path d="m133 91 15-5m-10 3v-8" />
+                </g>
+              </svg>
+            </div>
+          </article>
+        </section>
+        <section id="about" class="principles" aria-label="About this project">
+          <div>
+            <h3>Observed here.</h3>
+            <p>
+              Measurements from our own stations, with observation times and
+              sources kept in view.
+            </p>
+          </div>
+          <div>
+            <h3>A record worth keeping.</h3>
+            <p>Explore the weather across days, seasons, and years.</p>
+          </div>
+          <div>
+            <h3>Open by design.</h3>
+            <p>
+              Open-source software and reusable weather data. Useful
+              observations belong out in the world.
+            </p>
+          </div>
+        </section>
+      </main>
+      <footer class="footer">
+        <a
+          class="iceburg-credit"
+          href="https://iceburg.net"
+          aria-label="Iceburg home"
+        >
+          <span>A project by</span>
+          <img
+            src="./assets/iceburg-logo.svg"
+            alt="Iceburg"
+            width="180"
+            height="35"
+          />
+        </a>
+        <div class="footer-links">
+          <span>Pilot data · unverified setup</span
+          ><a href="https://github.com/briceburg/canones-weather">Source ↗</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+---
+- name: Inspect an existing Pi without changing its configuration
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Require gateway configuration
+      ansible.builtin.assert:
+        that:
+          - weather_gateway is defined
+          - weather_gateway is match('^https?://[^/]+/?$')
+        fail_msg: Supply weather_gateway as the gateway HTTP(S) origin.
+    - name: Check supported host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == 'Debian'
+          - ansible_facts.service_mgr == 'systemd'
+          - ansible_facts.architecture == 'aarch64'
+    - name: Read gateway data from the Pi network
+      ansible.builtin.uri:
+        url: "{{ weather_gateway | regex_replace('/$', '') }}/get_livedata_info"
+        return_content: true
+        use_proxy: false
+        timeout: 5
+      register: weather_live
+      changed_when: false
+      check_mode: false
+    - name: Show network and resource preflight
+      ansible.builtin.debug:
+        msg:
+          architecture: "{{ ansible_facts.architecture }}"
+          memory_mb: "{{ ansible_facts.memtotal_mb }}"
+          gateway_status: "{{ weather_live.status }}"

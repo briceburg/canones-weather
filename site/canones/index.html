@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#101819" />
+    <meta
+      name="description"
+      content="Weather at Secco Creek, Cañones, New Mexico. Explore current conditions and weather history."
+    />
+    <title>Secco Creek — Iceburg Weather</title>
+    <link rel="icon" href="./assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./assets/styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="shell">
+      <header class="header">
+        <a
+          class="brand"
+          href="https://weather.iceburg.net"
+          data-route="hub"
+          aria-label="Iceburg Weather home"
+          ><img src="./assets/mark.svg" alt="" width="38" height="38" />iceburg
+          <span>/ weather</span></a
+        >
+        <nav aria-label="Main">
+          <a href="https://weather.iceburg.net" data-route="hub">All stations</a
+          ><a href="#history" aria-current="page">History</a
+          ><a
+            class="desktop"
+            href="https://github.com/briceburg/canones-weather"
+            >Source ↗</a
+          >
+        </nav>
+      </header>
+      <main id="main">
+        <aside class="pilot-notice" id="pilot-notice" role="note">
+          <strong>Pilot observations</strong>
+          <p id="pilot-notice-text">
+            Sensor placement is provisional. Primary temperature and humidity
+            may come from the garage WN32. Sensor mapping is unverified;
+            Wunderground/CWOP publishing is disabled.
+          </p>
+        </aside>
+        <section class="station-header" aria-labelledby="station-title">
+          <div>
+            <p class="eyebrow">Cañones · New Mexico</p>
+            <h1 id="station-title">Secco Creek</h1>
+            <p class="muted small">A little weather, a longer perspective.</p>
+          </div>
+          <div class="mode-controls">
+            <span class="tag sample" id="status">Sample data</span>
+            <div class="segments" aria-label="Data source">
+              <button type="button" data-mode="sample" aria-pressed="true">
+                Sample</button
+              ><button type="button" data-mode="live" aria-pressed="false">
+                Live feed
+              </button>
+            </div>
+          </div>
+        </section>
+        <div class="notice" id="notice" role="status">
+          <span id="notice-text"
+            >Design preview. All readings and history shown here are
+            illustrative sample data, not station observations.</span
+          ><a href="./data/sample/current.json" id="json-link">View JSON ↗</a>
+        </div>
+        <noscript
+          ><p class="no-script">
+            Enable JavaScript to view observations and interactive charts. The
+            sample JSON remains available above.
+          </p></noscript
+        >
+        <section class="observation-layout" aria-label="Current conditions">
+          <div class="current-panel">
+            <div>
+              <p class="label" id="temperature-label">Outdoor temperature</p>
+              <div class="temperature">
+                <span id="temperature">—</span
+                ><span class="unit" data-unit="temperature">°F</span>
+              </div>
+              <p class="stamp" id="observed-at">Loading sample observation…</p>
+            </div>
+            <svg class="sun-mark" viewBox="0 0 100 100" aria-hidden="true">
+              <circle
+                cx="50"
+                cy="50"
+                r="19"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <g
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              >
+                <path
+                  d="M50 13v10m0 54v10M13 50h10m54 0h10M24 24l7 7m38 38 7 7M24 76l7-7m38-38 7-7"
+                />
+              </g>
+            </svg>
+          </div>
+          <div class="details-panel">
+            <div class="metric">
+              <p class="label">Humidity</p>
+              <p class="metric-value">
+                <span id="humidity">—</span><span class="metric-unit"> %</span>
+              </p>
+              <p class="metric-detail" id="humidity-label">
+                Outdoor relative humidity
+              </p>
+            </div>
+            <div class="metric">
+              <p class="label">Wind</p>
+              <p class="metric-value">
+                <span id="wind">—</span
+                ><span class="metric-unit" data-unit="wind"> mph</span>
+              </p>
+              <p class="metric-detail" id="gust">Gust — · direction —</p>
+            </div>
+            <div class="metric">
+              <p class="label">Rain today</p>
+              <p class="metric-value">
+                <span id="rain">—</span
+                ><span class="metric-unit" data-unit="rain"> in</span>
+              </p>
+              <p class="metric-detail">Since local midnight</p>
+            </div>
+            <div class="metric">
+              <p class="label">Solar radiation</p>
+              <p class="metric-value">
+                <span id="solar">—</span><span class="metric-unit"> W/m²</span>
+              </p>
+              <p class="metric-detail" id="uv">UV index —</p>
+            </div>
+          </div>
+        </section>
+        <section
+          class="history-panel"
+          id="history"
+          aria-labelledby="history-title"
+        >
+          <div class="history-heading">
+            <div>
+              <h2 id="history-title">A longer view.</h2>
+              <p id="history-subtitle">
+                Sample history · hourly detail and daily summaries
+              </p>
+            </div>
+            <div class="segments" aria-label="History period">
+              <button type="button" data-period="day" aria-pressed="true">
+                24h</button
+              ><button type="button" data-period="week" aria-pressed="false">
+                7d</button
+              ><button type="button" data-period="month" aria-pressed="false">
+                30d</button
+              ><button type="button" data-period="year" aria-pressed="false">
+                1y</button
+              ><button type="button" data-period="all" aria-pressed="false">
+                All
+              </button>
+            </div>
+          </div>
+          <div class="chart-toolbar">
+            <div class="chart-tabs" aria-label="Chart measurement">
+              <button
+                type="button"
+                data-metric="temperature"
+                aria-pressed="true"
+              >
+                Temperature</button
+              ><button
+                type="button"
+                data-metric="humidity"
+                aria-pressed="false"
+              >
+                Humidity</button
+              ><button type="button" data-metric="wind" aria-pressed="false">
+                Wind</button
+              ><button type="button" data-metric="rain" aria-pressed="false">
+                Rain
+              </button>
+            </div>
+            <div class="segments" aria-label="Display units">
+              <button type="button" data-units="us" aria-pressed="true">
+                °F / in</button
+              ><button type="button" data-units="metric" aria-pressed="false">
+                °C / mm
+              </button>
+            </div>
+          </div>
+          <div
+            id="chart"
+            class="chart"
+            role="img"
+            aria-label="Weather history chart. Loading sample data."
+          ></div>
+          <p class="chart-description" id="chart-description"></p>
+          <p class="history-foot">
+            <span id="history-range">—</span
+            ><span id="history-resolution">—</span>
+          </p>
+        </section>
+        <section class="below-grid" aria-label="Station details and open data">
+          <div>
+            <h3>Rooted in Cañones.</h3>
+            <dl class="station-facts">
+              <div>
+                <dt>Location</dt>
+                <dd>
+                  <a
+                    href="https://www.openstreetmap.org/?mlat=36.150028&amp;mlon=-106.445500#map=15/36.150028/-106.445500"
+                    aria-label="View Secco Creek station on OpenStreetMap"
+                    >Secco Creek, New Mexico ↗</a
+                  >
+                </dd>
+              </div>
+              <div>
+                <dt>Time zone</dt>
+                <dd>America/Denver</dd>
+              </div>
+              <div>
+                <dt>Outdoor sensor</dt>
+                <dd>Ecowitt WS90</dd>
+              </div>
+              <div>
+                <dt>Gateway</dt>
+                <dd>Ecowitt GW3000</dd>
+              </div>
+            </dl>
+          </div>
+          <div>
+            <h3>Weather, shared openly.</h3>
+            <p>
+              Explore the weather over time, or download the observations to use
+              in your own projects. Recorded here, shared with you.
+            </p>
+            <p id="provenance">
+              Sample values only. Live sensor mapping is unverified.
+            </p>
+            <a class="small" href="https://github.com/briceburg/canones-weather"
+              >Explore the open-source project ↗</a
+            >
+          </div>
+        </section>
+      </main>
+      <footer class="footer">
+        <a
+          class="iceburg-credit"
+          href="https://iceburg.net"
+          aria-label="Iceburg home"
+        >
+          <span>A project by</span>
+          <img
+            src="./assets/iceburg-logo.svg"
+            alt="Iceburg"
+            width="180"
+            height="35"
+          />
+        </a>
+        <div class="footer-links">
+          <span>Charts by Apache ECharts</span
+          ><a href="https://weather.iceburg.net" data-route="hub"
+            >Back to the hub ↗</a
+          >
+        </div>
+      </footer>
+    </div>
+    <script src="./assets/vendor/echarts/echarts.min.js"></script>
+    <script type="module" src="./assets/dashboard.js"></script>
+  </body>
+</html>

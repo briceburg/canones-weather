@@ -1,0 +1,80 @@
+version = 5.5.2
+WEEWX_ROOT = {{ weather_state_root }}
+USER_ROOT = {{ weather_install_root }}/driver/user
+log_success = True
+log_failure = True
+
+[Station]
+    location = Secco Creek pilot
+    latitude = 36.150028
+    longitude = -106.445500
+    altitude = {{ weather_elevation_m }}, meter
+    station_type = EcowittHttp
+
+[EcowittHttp]
+    driver = user.ecowitt_http
+    ip_address = {{ weather_gateway | urlsplit('netloc') }}
+    poll_interval = 20
+    max_tries = 3
+    retry_wait = 5
+    url_timeout = 5
+    firmware_update_check_interval = 0
+    [[field_map_extensions]]
+        radiation = common_list.0x15.val
+        rainRate = piezoRain.0x0E.val
+
+[StdConvert]
+    target_unit = METRICWX
+
+[StdCalibrate]
+    [[Corrections]]
+        # The driver converts light to lux before field mapping; restore W/m².
+        radiation = radiation / 126.7 if radiation is not None else None
+
+[StdWXCalculate]
+    [[Calculations]]
+        rain = prefer_hardware
+    [[Delta]]
+        [[[rain]]]
+            input = p_rainyear
+
+[StdArchive]
+    archive_interval = 300
+    record_generation = software
+    archive_delay = 15
+    no_catchup = True
+
+[DataBindings]
+    [[wx_binding]]
+        database = archive_sqlite
+        table_name = archive
+        manager = weewx.manager.DaySummaryManager
+        schema = weewx.schemas.wview_extended.schema
+
+[Databases]
+    [[archive_sqlite]]
+        database_name = weewx.sdb
+        database_type = SQLite
+
+[DatabaseTypes]
+    [[SQLite]]
+        driver = weedb.sqlite
+        SQLITE_ROOT = {{ weather_state_root }}/archive
+
+[CanonesJSON]
+    output_root = {{ weather_state_root }}/public
+
+[Engine]
+    [[Services]]
+        prep_services = ,
+        data_services = ,
+        process_services = weewx.engine.StdConvert, weewx.engine.StdCalibrate, weewx.engine.StdQC, weewx.wxservices.StdWXCalculate
+        xtype_services = weewx.wxxtypes.StdWXXTypes, weewx.wxxtypes.StdPressureCooker, weewx.wxxtypes.StdRainRater, weewx.wxxtypes.StdDelta
+        archive_services = weewx.engine.StdArchive
+        restful_services = ,
+        report_services = canones_weather.export.JSONReport
+
+[Logging]
+    [[root]]
+        level = INFO
+        handlers = console,

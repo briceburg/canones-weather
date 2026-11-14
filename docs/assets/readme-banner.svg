@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title description">
+<title id="title">Iceburg Weather — Cañones</title>
+<desc id="description">Weather, close to home. Original mountain artwork for the Secco Creek weather project in northern New Mexico.</desc>
+<rect width="1200" height="340" rx="18" fill="#101819"/>
+<svg x="52" y="48" width="40" height="40" viewBox="0 0 40 40"><rect width="40" height="40" rx="12" fill="#192728"/><g fill="none" stroke="#ddad79" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 27 9-15 5 8 4-6 8 13H7Z"/><path d="m12 27 7-8 5 8"/><path d="M28 8v3m4 0-2 2m-5-6v3"/></g></svg>
+
+<text x="106" y="74" fill="#a1b0ab" font-family="system-ui,sans-serif" font-size="18" letter-spacing="2">ICEBURG / WEATHER</text>
+<text x="52" y="167" fill="#e8ebe4" font-family="Georgia,serif" font-size="56">Weather, close to home.</text>
+<text x="54" y="222" fill="#e4b17b" font-family="system-ui,sans-serif" font-size="17" letter-spacing="3">CAÑONES · NEW MEXICO</text>
+<text x="54" y="278" fill="#a1b0ab" font-family="system-ui,sans-serif" font-size="18">Local observations. Changing seasons. Open data.</text>
+<svg x="750" y="0" width="400" height="340"
+            viewBox="0 0 480 400"
+            role="img"
+            aria-label="An illustration of the sun above layered mountain ridges"
+          >
+            <defs>
+              <linearGradient id="ridge" x2="0" y2="1">
+                <stop stop-color="#35473f" />
+                <stop offset="1" stop-color="#142020" />
+              </linearGradient>
+            </defs>
+            <circle cx="302" cy="115" r="48" fill="#e4b17b" opacity=".88" />
+            <circle
+              cx="302"
+              cy="115"
+              r="68"
+              fill="none"
+              stroke="#e4b17b"
+              opacity=".12"
+            />
+            <path
+              d="m10 280 90-104 62 59 91-102 69 83 60-36 88 104v92H10Z"
+              fill="#243630"
+            />
+            <path
+              d="m10 310 74-39 73 36 118-95 77 64 118-25v125H10Z"
+              fill="url(#ridge)"
+            />
+            <path
+              d="m10 344 110-18 91 17 133-31 126 28v36H10Z"
+              fill="#172425"
+            />
+            <g fill="none" stroke="#79947f" stroke-width="1" opacity=".28">
+              <path d="m10 305 74-39 73 36 118-95 77 64 118-25" />
+              <path d="m10 321 74-39 73 36 118-95 77 64 118-25" />
+              <path d="m10 337 74-39 73 36 118-95 77 64 118-25" />
+              <path d="m10 353 74-39 73 36 118-95 77 64 118-25" />
+            </g>
+            <path d="M10 376h460" stroke="#3a4c43" />
+            <g
+              fill="#778a80"
+              font-family="monospace"
+              font-size="10"
+              letter-spacing="3"
+            >
+              <text x="12" y="397">NORTHERN NEW MEXICO</text>
+              <text x="412" y="397">36° N</text>
+            </g>
+          </svg>
+</svg>
