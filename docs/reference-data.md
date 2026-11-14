@@ -1,8 +1,9 @@
-# Local historical controls
+# Regional reference history
 
-Historical controls provide context for Secco Creek; they do not backfill its
-archive or establish past conditions at the property. Select either or both in
-the dashboard to compare daily temperature ranges and precipitation
+Reference history compares weather across locations: for example, Albuquerque's
+monsoon rain against Secco Creek's. Sources need not share the station's climate;
+they never backfill its archive or establish past conditions at the property.
+Select references in the dashboard to compare temperature and precipitation
 in 30d, 1y, 3y, All, Seasons, or Monsoon. Unsupported views preserve source
 selections without changing the period or measurement. Current conditions always
 remain the local station's observations.
@@ -13,20 +14,21 @@ commissioning date.
 | Control | What it represents | Elevation |
 | --- | --- | --- |
 | Daymet | Estimated weather for the 1 km grid cell requested at Secco Creek's coordinates | 2,328 m, as returned by the provider |
-| Abiquiu Dam, USC00290041 | NOAA daily observations, about 10.2 km / 6.3 mi away | 1,944.6 m |
+| Abiquiu Dam, USC00290041 | NOAA daily observations, supplemented by same-station RCC-ACIS reports; about 10.2 km / 6.3 mi away | 1,944.6 m |
+| Albuquerque airport, USW00023050 | Regional NOAA temperature and precipitation observations | 1,618.5 m |
+| Madrid 1.9 SE, US1NMSF0189 | Regional NOAA/CoCoRaHS precipitation observations, beginning June 2021 | 1,923.6 m |
 | Secco Creek | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
 
-Daymet incorporates station observations and terrain in a gridded model. A
-nearby grid cell can still miss inversions, shade, exposure, and localized storms.
-Its grid elevation is about 176 m above the supplied Secco Creek elevation;
-Abiquiu Dam is about 207 m below. Neither reference is verified ground truth for
-this property's microclimate. Compare both against commissioned local data.
+Daymet incorporates station observations and terrain in a gridded model. Its grid
+elevation is about 176 m above Secco Creek; Abiquiu Dam is about 207 m below.
+Differences in terrain, elevation, exposure, and storms are part of these regional
+comparisons, rather than errors to adjust away.
 
 ## Variables and boundaries
 
-Controls contain daily minimum/maximum temperature in degrees Celsius and daily
-precipitation in millimetres. Neither downloaded record supplies the daily mean
-used by the local chart; no mean is invented from highs and lows. Wind, humidity,
+References contain daily minimum/maximum temperature in degrees Celsius and daily
+precipitation in millimetres; Madrid supplies precipitation only. No reference supplies
+the daily mean used by the local chart; no mean is invented from highs and lows. Wind, humidity,
 and solar controls are unavailable. Reference precipitation includes snow water
 equivalent, which is different from the WS90's rainfall measurement.
 
@@ -50,23 +52,52 @@ The collector must export `record_started_at` for this marker to appear; it is
 never inferred from the oldest point in a rolling window. Imported values never
 enter WeeWX or Wunderground/CWOP submissions.
 
+## Abiquiu gaps and supplemental reports
+
+A November 2026 audit found 12 whole months absent from GHCN's Abiquiu file
+across 2016–2025. These omissions are distinct from individual missing values and
+quality exclusions; an absent file record does not establish why a report is missing.
+RCC-ACIS, used by NWS NOWData, holds additional reports for the same station.
+
+The refresh requests that exact GHCN station ID and validates the response identity
+and daily calendar. GHCN remains primary. Only fields in absent monthly records
+can be supplemented; existing values, explicit missing days, and quality rejections
+are never overridden. Only unflagged observations and precipitation traces are
+accepted. No interpolation, nearby stations, or divided multiday totals fill gaps.
+
+For the audited 2016–2025 period (3,653 days):
+
+| Daily field | GHCN alone | With RCC-ACIS supplements |
+| --- | --- | --- |
+| Minimum temperature | 3,175 | 3,436 |
+| Maximum temperature | 3,245 | 3,509 |
+| Precipitation | 3,273 | 3,541 |
+
+July and August 2022 remain missing in both feeds. Supplemented daily values carry
+`field_sources` provenance, shown in tooltips; source metadata retains the request
+URL and policy. RCC-ACIS can include preliminary reports, so supplementation is
+not a claim of finalized NCEI data. If its request fails or is incomplete, the
+Abiquiu refresh fails without replacing its last published file; peers still refresh.
+See [ACIS documentation](https://docs.rcc-acis.org/acisws/) and
+[NWS's explanation of archive/preliminary differences](https://www.weather.gov/climateservices/nowdatafaq).
+
 ## Retrieved comparison
 
 A comparison of 2016–2025 retrieved in November 2026,
-using dates available in both sources and the NOAA exclusions above, found:
+using matched dates and the GHCN/RCC-ACIS policy above, found:
 
 | Statistic, Daymet minus Abiquiu | Matched days | Difference |
 | --- | --- | --- |
-| Mean daily high temperature | 3,243 | −3.21°C / −5.78°F |
-| Mean daily low temperature | 3,173 | −1.83°C / −3.29°F |
-| Precipitation total on matched dates | 3,271 | 3,445.77 vs 2,232.70 mm: Daymet 54.3% higher |
+| Mean daily high temperature | 3,506 | −3.24°C / −5.82°F |
+| Mean daily low temperature | 3,433 | −1.74°C / −3.12°F |
+| Precipitation total on matched dates | 3,538 | 3,720.45 vs 2,368.84 mm: Daymet 57.1% higher |
 
-For June 15–September 30, all 108 dates are available in each source:
+For June 15–September 30, all 108 dates are available in each listed source (mm):
 
-| Monsoon | Daymet | Abiquiu Dam |
-| --- | --- | --- |
-| 2024 | 217.15 mm / 8.55 in | 143.20 mm / 5.64 in |
-| 2025 | 201.65 mm / 7.94 in | 107.30 mm / 4.22 in |
+| Monsoon | Daymet near station | Abiquiu Dam | Albuquerque airport | Madrid 1.9 SE |
+| --- | --- | --- | --- | --- |
+| 2024 | 217.15 | 143.20 | 97.80 | 203.10 |
+| 2025 | 201.65 | 107.30 | 78.40 | 149.30 |
 
 These differences are comparisons between sources, not error estimates against
 Secco Creek. Daymet uses station inputs, so comparing it to a nearby station is
@@ -74,7 +105,7 @@ not necessarily an independent model validation.
 
 ## Refreshing controls
 
-Both provider downloads are free and the command needs no credentials. The
+Provider downloads are free and the command needs no credentials. The
 published JSON records download URLs, citations, elevations, retrieval time, and
 source notes. Retain those attributions when redistributing it; the repository's
 software license does not replace provider data terms.
@@ -89,7 +120,8 @@ uv run python -m canones_weather.reference \
 
 Controls are generated outside Git and served from the configured R2 reference
 feed, independently of Pages builds. The local default output is ignored
-`tmp/reference/`. Use `--source abiquiu` or `--source daymet` to refresh one source;
+`tmp/reference/`. Use `--source abiquiu`, `daymet`, `albuquerque`, or `madrid` to refresh one source;
+the default `all` processes every source independently;
 failures in one source do not prevent processing the other. Each validated file
 replaces its own R2 object only on successful upload; the last published data
 survives a failed refresh. Missing or invalid downloads are not published.
@@ -100,8 +132,9 @@ so it cannot be a current-year control. `available_through` describes data
 availability; `retrieved_at` describes the download time. The dashboard shows
 coverage dates and revalidates selected controls periodically in both modes.
 
-[The reference workflow](../.github/workflows/reference-data.yml) checks both
-providers daily and supports manual dispatch. Its independent matrix jobs do
+[The reference workflow](../.github/workflows/reference-data.yml) checks all four
+references daily, when reference code or workflow changes reach `main`, and on
+manual dispatch. Its independent matrix jobs do
 not run on the Pi or modify the weather archive. Configure repository secrets
 `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` with the existing bucket-scoped
 publisher key, and repository variable `R2_PUBLISHER_CONFIG` with the non-secret
@@ -121,4 +154,6 @@ artificial commits as a keepalive. A fresh download cannot remove provider lag.
   [station metadata](https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt),
   [format/quality flags](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt),
   and [GHCN-Daily citation](https://doi.org/10.7289/V5D21VHZ).
+- [NOAA Albuquerque airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023050.dly)
+  and [Madrid 1.9 SE record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/US1NMSF0189.dly).
 - [NOAA data access and public-domain guidance](https://www.noaa.gov/office-education/outreach-communication/faq).

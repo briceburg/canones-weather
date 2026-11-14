@@ -68,10 +68,11 @@ The sample generator uses only Python's standard library.
 ## Historical controls
 
 The chart-source checkboxes independently select station observations, Daymet,
-and Abiquiu Dam in either Sample or Live mode. Station observations and Daymet
+Abiquiu Dam, Albuquerque airport, and Madrid 1.9 SE in Sample or Live mode. Station observations and Daymet
 are selected by default. References appear only for historical temperature and
 precipitation views; selections persist in unsupported views without changing
-the period or measurement. Hide station observations for a reference-only chart.
+the period or measurement. Madrid appears only for precipitation. Hide station
+observations for a reference-only chart.
 
 Reference sources are labeled separately and never fill station gaps. Sample
 station series and their start marker remain illustrative; references retain

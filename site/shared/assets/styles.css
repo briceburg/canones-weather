@@ -840,13 +840,11 @@ p {
 .control-picker input { accent-color: #e4b17b; }
 .control-picker p { margin: 8px 0; color: #a1b0ab; }
 
-.control-picker input[data-control="daymet"] { accent-color: #b8a3cf; }
-.control-picker input[data-control="abiquiu"] { accent-color: #86b4cb; }
 
 .chart { cursor: crosshair; }
 .timeline-help { color: #a1b0ab; margin: 8px 0; }
 
-.reference-summary { margin: 10px 0; color: var(--muted); }
+.reference-summary { margin: 10px 0; max-width: none; color: var(--muted); }
 #reference-controls { scroll-margin-top: 24px; }
 
 .reference-sources {
