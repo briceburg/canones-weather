@@ -365,19 +365,24 @@ function renderChart() {
       ...extra,
     };
   };
+  // Temperature hue encodes high/low; line pattern identifies the source.
+  const temperatureColors = {
+    station: {high: "#edb46f", low: "#7fc9e4"},
+    daymet: {high: "#ef9585", low: "#aaa8ee"},
+    abiquiu: {high: "#d9a4bd", low: "#76cbb6"},
+  };
   const series = stationHasData ? [
     makeSeries(comparisons.length ? `${stationName} · ${state.metric === "temperature" ? "mean" : label.toLowerCase()}` : state.metric === "temperature" ? "Mean temperature" : label, field, comparisons.length ? "#e4b17b" : color),
   ] : [];
   if (state.metric === "temperature" && !recent &&
       rows.some((row) => numeric(row.temperature_min_c) || numeric(row.temperature_max_c))) {
-    for (const [suffix, key, rangeColor, style] of [
-      ["low", "temperature_min_c", "#9fbfd1", "dotted"],
-      ["high", "temperature_max_c", "#bc8e84", "dashed"],
+    for (const [suffix, key, seriesColor] of [
+      ["low", "temperature_min_c", temperatureColors.station.low],
+      ["high", "temperature_max_c", temperatureColors.station.high],
     ]) {
-      const seriesColor = comparisons.length ? "#e4b17b" : rangeColor;
       const prefix = comparisons.length ? `${stationName} · ` : "";
       series.push(makeSeries(`${prefix}${resolution} ${suffix}`, key, seriesColor, {
-        lineStyle: {width: 1, type: style, color: seriesColor},
+        lineStyle: {width: 1.5, type: "solid", color: seriesColor},
       }));
     }
   }
@@ -393,8 +398,10 @@ function renderChart() {
     for (const key of referenceFields) {
       if (!item.rows.some((row) => numeric(row[key]))) continue;
       const suffix = key === "temperature_min_c" ? "low" : key === "temperature_max_c" ? "high" : "precipitation";
-      series.push(makeSeries(`${name} · ${suffix}`, key, color, {
-        lineStyle: {color, width: 1.5, type: key === "temperature_min_c" ? "dashed" : "solid"},
+      const seriesColor = state.metric === "temperature"
+        ? temperatureColors[item.source.id][suffix] : color;
+      series.push(makeSeries(`${name} · ${suffix}`, key, seriesColor, {
+        lineStyle: {color: seriesColor, width: 1.5, type: item.source.id === "daymet" ? "dashed" : "dotted"},
       }, item.rows));
     }
   }
@@ -516,6 +523,8 @@ function renderChart() {
   $("chart-description").textContent = seasonal
     ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
     : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" && !recent ? "mean temperature, with minimum and maximum" : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
+  if (state.metric === "temperature" && !recent)
+    $("chart-description").textContent += " Warm colors show highs; cool colors show lows. Station lines are solid, Daymet dashed, and Abiquiu dotted.";
   if (comparisons.length)
     $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : " No local daily values are available in this view yet; only the selected controls are shown."}`;
   if (state.metric === "solar")
