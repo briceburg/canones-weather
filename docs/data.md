@@ -22,8 +22,14 @@ Publish `canones/current.json`, matching the shape of
 Units are explicit in field names: Celsius, percent, metres per second, degrees,
 millimetres, watts per square metre, and UV index. `rain_today_mm` is the local-day
 accumulation, not a lifetime counter. Keep unavailable readings as `null`, never
-zero. The pilot exporter leaves daily rainfall unavailable when its archive
-does not cover the local day. Site display units do not alter stored values.
+zero. The exporter prefers the WS90's measured daily counter, mapped to WeeWX's
+standard `dayRain` field (last value, not an interval average). The gateway must
+use the station time zone and a midnight daily reset. `rain_today_source` identifies
+`ws90_daily_counter`, `complete_archive`, or `local_midnight_reset`; it is `null`
+when the total is unavailable. Without the daily counter, the archive must cover
+the local day with known rain values. The daily card can therefore show a measured
+total while historical intervals remain missing. Site display units do not alter
+stored values.
 
 The source and verification fields describe provenance, not permission to upload
 to Wunderground/CWOP. Those integrations need independently verified field mapping,

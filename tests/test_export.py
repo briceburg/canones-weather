@@ -91,3 +91,36 @@ def test_first_boundary_observation_survives_hourly_and_dst_daily_summaries(tmp_
     assert days[1]["at"] == "2026-03-08T07:00:00Z"
     assert days[2]["at"] == "2026-03-09T06:00:00Z"
     assert all(row["rain_mm"] is None for row in days)
+
+
+def test_daily_counter_uses_last_value_preserves_gaps_and_resets_at_midnight(tmp_path):
+    import weewx.accum
+    from weeutil.weeutil import TimeSpan
+
+    today = startOfDay(1794672600)
+    accumulator = weewx.accum.Accum(TimeSpan(today, today + 300))
+    for offset, counter in [(20, 0.10), (280, 0.15)]:
+        accumulator.addRecord({"dateTime": today + offset, "usUnits": weewx.US, "dayRain": counter, "rain": None})
+    record = {**accumulator.getRecord(), "interval": 5}
+    assert record["dayRain"] == 0.15  # Cumulative counter: last, not average or sum.
+    database = {"driver": "weedb.sqlite", "database_name": str(tmp_path / "archive.sdb")}
+    with weewx.manager.DaySummaryManager.open_with_create(
+        database, schema=weewx.schemas.wview_extended.schema
+    ) as manager:
+        manager.addRecord(record)
+        export(manager, record, tmp_path / "public")
+        current = json.loads((tmp_path / "public/current.json").read_text())["outdoor"]
+        history = json.loads((tmp_path / "public/history.json").read_text())
+        assert current["rain_today_mm"] == pytest.approx(3.81)
+        assert current["rain_today_source"] == "ws90_daily_counter"
+        assert history["recent"][0]["rain_mm"] is None
+        for stamp, counter, expected, source in [
+            (today + 86400, 0.40, 0.0, "local_midnight_reset"),
+            (today + 86700, 0.02, 0.508, "ws90_daily_counter"),
+        ]:
+            record = {"dateTime": stamp, "usUnits": weewx.US, "interval": 5, "rain": None, "dayRain": counter}
+            manager.addRecord(record)
+            export(manager, record, tmp_path / "public")
+            current = json.loads((tmp_path / "public/current.json").read_text())["outdoor"]
+            assert current["rain_today_mm"] == pytest.approx(expected)
+            assert current["rain_today_source"] == source
