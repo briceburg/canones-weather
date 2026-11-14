@@ -1,0 +1,50 @@
+name: Create release
+
+on:
+  workflow_dispatch:
+    inputs:
+      nickname:
+        description: Release nickname
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: create-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require main
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo '::error::Dispatch releases against main.'
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.13.8'
+          python-version: '3.13'
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        with:
+          tofu_version: '1.13.9'
+          tofu_wrapper: false
+      - name: Validate
+        run: bin/ci
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NICKNAME: ${{ inputs.nickname }}
+        run: uv run --locked python bin/create-release "$RELEASE_NICKNAME"

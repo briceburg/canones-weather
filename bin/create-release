@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""Create a named release of the tested main commit from GitHub Actions."""
+
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+def next_tag(tags, now):
+    prefix = now.astimezone(timezone.utc).strftime("v%Y.%m.%d")
+    sequences = [int(match[1]) for tag in tags if (match := re.fullmatch(re.escape(prefix) + r"-(\d+)", tag))]
+    return f"{prefix}-{max(sequences, default=-1) + 1}"
+
+
+def main():
+    if os.environ.get("GITHUB_REF") != "refs/heads/main":
+        raise SystemExit("Dispatch Create release against main.")
+    nickname = sys.argv[1].strip()
+    if not nickname:
+        raise SystemExit("A release nickname is required.")
+    tags = subprocess.check_output(["git", "tag", "--list"], text=True).splitlines()
+    tag = next_tag(tags, datetime.now(timezone.utc))
+    subprocess.run(
+        [
+            "gh",
+            "release",
+            "create",
+            tag,
+            "--repo",
+            os.environ["GITHUB_REPOSITORY"],
+            "--target",
+            os.environ["GITHUB_SHA"],
+            "--title",
+            f"{tag} — {nickname}",
+            "--generate-notes",
+            "--latest",
+        ],
+        check=True,
+    )
+
+
+if __name__ == "__main__":
+    main()

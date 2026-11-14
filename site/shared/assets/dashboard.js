@@ -35,6 +35,12 @@ function renderClock() {
 renderClock();
 setInterval(renderClock, 1000);
 const chart = window.echarts.init($("chart"), null, { renderer: "svg" });
+const referenceSources = {
+  daymet: {name: "Daymet estimate", color: "#b8a3cf", high: "#ef9585", low: "#aaa8ee", line: "dashed"},
+  abiquiu: {name: "Abiquiu Dam", color: "#86b4cb", high: "#d9a4bd", low: "#76cbb6", line: "dotted"},
+  albuquerque: {name: "Albuquerque airport", color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
+  madrid: {name: "Madrid 1.9 SE", color: "#a1c6ac", line: "solid", rainOnly: true},
+};
 const state = {
   mode: settings.default_mode,
   metric: "temperature",
@@ -322,32 +328,34 @@ function renderChart() {
   const windowEnd = state.viewport?.to ?? end;
   const inWindow = (row) => seasonal || (Date.parse(row.at) >= windowStart && Date.parse(row.at) <= windowEnd);
   const stationInWindow = rows.some((row) => numeric(row[field]) && inWindow(row));
-  const showReferences = eligible && state.controls.size > 0;
+  const activeControls = eligible ? [...state.controls].filter((key) =>
+    !referenceSources[key].rainOnly || state.metric === "rain") : [];
+  const showReferences = activeControls.length > 0;
   if (showReferences)
-    for (const key of state.controls)
+    for (const key of activeControls)
       if (!state.referenceCheckedAt[key]) loadReference(key);
-  const referenceNames = [...state.controls].map((key) =>
-    key === "daymet" ? "Daymet estimate" : "Abiquiu NOAA");
+  const referenceNames = activeControls.map((key) => referenceSources[key].name);
   $("reference-summary").textContent = showReferences
     ? `${referenceNames.join(" + ")} · Change chart sources ↓`
     : "Chart source settings ↓";
   const selectedReferences = showReferences
-    ? [...state.controls].map((key) => state.references[key]).filter(Boolean) : [];
+    ? activeControls.map((key) => state.references[key]).filter(Boolean) : [];
   const comparisons = selectedReferences.map((data) => ({
     source: data.source,
     rows: selectRows(data),
   }));
-  $("control-note").textContent = [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
-    : !eligible ? "Controls compare daily temperature ranges and precipitation in 30d, 1y, 3y, All, Seasons, or Monsoon."
-    : state.controls.size > selectedReferences.length ? "Loading historical controls…"
-    : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
-      " Separate reference records; neither establishes past conditions at Secco Creek."
-    : "Choose a control to overlay daily temperature ranges or precipitation; station observations remain separate.";
+  $("control-note").textContent = activeControls.some((key) => state.controlErrors.has(key)) ? "A source could not be loaded. Uncheck and reselect to retry."
+    : !eligible ? "References support temperature and precipitation in 30d and longer views."
+    : activeControls.length > selectedReferences.length ? "Loading reference history…"
+    : selectedReferences.length ? selectedReferences.map((data) => `${referenceSources[data.source.id].name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ")
+    : "Select sources to compare regional weather.";
   if (showReferences) {
     $("history-subtitle").textContent = stationInWindow
       ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
       : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
-    $("control-note").textContent += " Reference coverage may end before the selected window; missing days are not filled.";
+    $("control-note").textContent += " Gaps indicate unreported days.";
+    if (selectedReferences.some((data) => data.source.supplement))
+      $("control-note").textContent += " Abiquiu includes RCC-ACIS reports, possibly preliminary; daily tooltips identify supplemented values.";
   }
   if (seasonal && comparisons.length) {
     const periods = new Map([...rows, ...comparisons.flatMap((item) => item.rows)].map((row) => [row.start, row]));
@@ -360,10 +368,13 @@ function renderChart() {
     rows = align(rows);
     for (const item of comparisons) item.rows = align(item.rows);
   }
-  const rangeRows = [...rows, ...comparisons.flatMap((item) => item.rows)].sort((a, b) => seasonal ? a.start - b.start : Date.parse(a.at) - Date.parse(b.at));
-  $("history-range").textContent = !rangeRows.length ? "No history available" : seasonal
-    ? `${rangeRows[0].label} – ${rangeRows.at(-1).label}`
-    : `Available ${dateFormat.format(new Date(rangeRows[0].at))} – ${dateFormat.format(new Date(rangeRows.at(-1).at))}`;
+  // Each validated series is ordered; only its endpoints are needed for coverage.
+  const endpoints = [rows, ...comparisons.map((item) => item.rows)]
+    .flatMap((data) => data.length ? [data[0], data.at(-1)] : [])
+    .sort((a, b) => seasonal ? a.start - b.start : Date.parse(a.at) - Date.parse(b.at));
+  $("history-range").textContent = !endpoints.length ? "No history available" : seasonal
+    ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
+    : `Available ${dateFormat.format(new Date(endpoints[0].at))} – ${dateFormat.format(new Date(endpoints.at(-1).at))}`;
   if (comparisons.length && timestamp(history?.record_started_at))
     $("control-note").textContent += ` ${state.mode === "sample" ? "Sample station" : "Local archive"} begins ${dateFormat.format(new Date(history.record_started_at))}.`;
   const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
@@ -396,14 +407,21 @@ function renderChart() {
   }
   const unit = units()[state.metric];
   const seriesMeta = new Map();
+  let min = Infinity, max = -Infinity;
   const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
     seriesMeta.set(name, {rows: dataRows, key});
+    let points = 0;
+    const data = dataRows.map((row, index) => {
+      const value = convert(row[key]);
+      if (numeric(value)) { points++; min = Math.min(min, value); max = Math.max(max, value); }
+      return [seasonal ? index : Date.parse(row.at), value];
+    });
     return {
       name,
       type: state.metric === "rain" ? "bar" : "line",
-      showSymbol: seasonal || dataRows.filter((row) => numeric(row[key])).length === 1,
+      showSymbol: seasonal || points === 1,
       connectNulls: false,
-      data: dataRows.map((row, index) => [seasonal ? index : Date.parse(row.at), convert(row[key])]),
+      data,
       itemStyle: { color },
       lineStyle: { color, width: 2 },
       emphasis: { focus: "series" },
@@ -411,19 +429,14 @@ function renderChart() {
     };
   };
   // Temperature hue encodes high/low; line pattern identifies the source.
-  const temperatureColors = {
-    station: {high: "#edb46f", low: "#7fc9e4"},
-    daymet: {high: "#ef9585", low: "#aaa8ee"},
-    abiquiu: {high: "#d9a4bd", low: "#76cbb6"},
-  };
   const series = stationHasData ? [
     makeSeries(comparisons.length ? `${stationName} · ${state.metric === "temperature" ? "mean" : label.toLowerCase()}` : state.metric === "temperature" ? "Mean temperature" : label, field, comparisons.length ? "#e4b17b" : color),
   ] : [];
   if (state.metric === "temperature" && !recent &&
       rows.some((row) => numeric(row.temperature_min_c) || numeric(row.temperature_max_c))) {
     for (const [suffix, key, seriesColor] of [
-      ["low", "temperature_min_c", temperatureColors.station.low],
-      ["high", "temperature_max_c", temperatureColors.station.high],
+      ["low", "temperature_min_c", "#7fc9e4"],
+      ["high", "temperature_max_c", "#edb46f"],
     ]) {
       const prefix = comparisons.length ? `${stationName} · ` : "";
       series.push(makeSeries(`${prefix}${resolution} ${suffix}`, key, seriesColor, {
@@ -438,15 +451,14 @@ function renderChart() {
       }),
     );
   for (const item of comparisons) {
-    const name = item.source.id === "daymet" ? "Daymet estimate" : "Abiquiu NOAA";
-    const color = item.source.id === "daymet" ? "#b8a3cf" : "#86b4cb";
+    const {name, color, high, low, line} = referenceSources[item.source.id];
     for (const key of referenceFields) {
       if (!item.rows.some((row) => numeric(row[key]))) continue;
       const suffix = key === "temperature_min_c" ? "low" : key === "temperature_max_c" ? "high" : "precipitation";
       const seriesColor = state.metric === "temperature"
-        ? temperatureColors[item.source.id][suffix] : color;
+        ? (suffix === "low" ? low : high) : color;
       series.push(makeSeries(`${name} · ${suffix}`, key, seriesColor, {
-        lineStyle: {color: seriesColor, width: 1.5, type: item.source.id === "daymet" ? "dashed" : "dotted"},
+        lineStyle: {color: seriesColor, width: 1.5, type: line},
       }, item.rows));
     }
   }
@@ -458,7 +470,7 @@ function renderChart() {
     };
   }
   timelineDomain = seasonal ? {start: 0, end: rows.length - 1, seasonal: true} :
-    {start: Date.parse(rangeRows[0].at), end, seasonal: false};
+    {start: Date.parse(endpoints[0].at), end, seasonal: false};
   const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : timelineRange(timelineDomain, days, state.viewport);
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   chart.setOption(
@@ -478,7 +490,7 @@ function renderChart() {
         feature: {dataZoom: {yAxisIndex: "none"}},
       },
       legend: {
-        left: 0,
+        left: 50, // Leave room for the y-axis unit.
         type: "scroll",
         pageTextStyle: {color: "#a1b0ab"},
         show: series.length > 1,
@@ -493,12 +505,17 @@ function renderChart() {
         textStyle: { color: "#e8ebe4" },
         formatter: (entries) => {
           const title = seasonal ? rows[entries[0].value[0]].label : (daily ? dateFormat : timeFormat).format(new Date(entries[0].value[0]));
-          return `${title}<br>` + entries.map((entry) => {
+          const ordered = [...entries].sort((a, b) => {
+            const aValue = a.value[1], bValue = b.value[1];
+            return numeric(aValue) && numeric(bValue) ? bValue - aValue
+              : Number(numeric(bValue)) - Number(numeric(aValue));
+          });
+          return `${title}<br>` + ordered.map((entry) => {
             const meta = seriesMeta.get(entry.seriesName);
             const row = meta.rows[entry.dataIndex];
             const value = state.metric === "rain" && row?.precipitation_trace ? "Trace" : numeric(entry.value[1])
               ? entry.value[1].toFixed(state.metric === "rain" && state.units === "us" ? 2 : 1) + " " + unit : "Missing";
-            return `${entry.marker}${entry.seriesName}: ${value}${seasonal ? ` · ${row?.coverage?.[meta.key] ?? 0}/${row?.expectedDays} days` : ""}`;
+            return `${entry.marker}${entry.seriesName}: ${value}${seasonal ? ` · ${row?.coverage?.[meta.key] ?? 0}/${row?.expectedDays} days` : row?.field_sources?.[meta.key] === "rcc-acis" ? " · RCC-ACIS supplemental report" : ""}`;
           }).join("<br>");
         },
         axisPointer: { type: state.metric === "rain" ? "shadow" : "line" },
@@ -555,10 +572,6 @@ function renderChart() {
     true,
   );
   chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
-  let min = Infinity, max = -Infinity;
-  for (const {data} of series) for (const [, value] of data) {
-    if (numeric(value)) { min = Math.min(min, value); max = Math.max(max, value); }
-  }
   const range = min <= max
     ? `Available values span ${min.toFixed(1)} to ${max.toFixed(1)} ${unit}.`
     : "No recorded values in this period.";
@@ -566,7 +579,7 @@ function renderChart() {
     ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
     : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" && !recent ? `${stationHasData ? "mean temperature, with " : "temperature "}minimum and maximum` : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
   if (state.metric === "temperature" && !recent)
-    $("chart-description").textContent += " Warm colors show highs; cool colors show lows. Station lines are solid, Daymet dashed, and Abiquiu dotted.";
+    $("chart-description").textContent += " Warm colors show highs; cool colors show lows. Station lines are solid; Daymet dashed, Abiquiu dotted, and Albuquerque dash-dot.";
   if (comparisons.length)
     $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : ` ${state.showStation ? "No local daily values are available in this view yet" : "Station observations are hidden"}; only the selected controls are shown.`}`;
   if (state.metric === "solar")
@@ -688,14 +701,14 @@ $("show-station-history").addEventListener("change", (event) => {
   renderChart();
 });
 for (const input of document.querySelectorAll("[data-control]")) {
+  input.style.accentColor = referenceSources[input.dataset.control].color;
   input.addEventListener("change", () => {
     const key = input.dataset.control;
     if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
-    if (input.checked) {
-      state.controls.add(key);
-      if (state.controlErrors.has(key) || Date.now() - state.referenceCheckedAt[key] >= 3600000)
-        delete state.referenceCheckedAt[key];
-    } else state.controls.delete(key);
+    if (state.controlErrors.has(key) || Date.now() - state.referenceCheckedAt[key] >= 3600000)
+      delete state.referenceCheckedAt[key];
+    if (input.checked) state.controls.add(key);
+    else state.controls.delete(key);
     state.controlErrors.delete(key);
     renderChart();
   });

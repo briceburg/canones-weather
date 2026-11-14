@@ -1,5 +1,10 @@
+import json
+import sys
 from datetime import date
 
+import pytest
+
+from canones_weather import reference
 from canones_weather.reference import daymet_rows, document, noaa_rows
 
 
@@ -46,10 +51,6 @@ year,yday,prcp (mm/day),tmax (deg c),tmin (deg c)
 
 
 def test_failed_provider_preserves_its_cache_and_does_not_stop_peer(tmp_path, monkeypatch):
-    import sys
-
-    from canones_weather import reference
-
     prior = tmp_path / "daymet.json"
     prior.write_text("previous validated snapshot\n")
     data = document(
@@ -59,10 +60,49 @@ def test_failed_provider_preserves_its_cache_and_does_not_stop_peer(tmp_path, mo
     def fetch(key, args):
         if key == "daymet":
             raise OSError("Provider unavailable")
-        return data
+        return {**data, "source": {"id": key}}
 
     monkeypatch.setattr(reference, "fetch_reference", fetch)
     monkeypatch.setattr(sys, "argv", ["reference", "--latitude", "36", "--longitude=-106", "--output", str(tmp_path)])
     assert reference.main() == 1
     assert prior.read_text() == "previous validated snapshot\n"
-    assert (tmp_path / "abiquiu.json").exists()
+    for key in reference.NOAA_STATIONS:
+        assert json.loads((tmp_path / f"{key}.json").read_text())["source"]["id"] == key
+
+
+def test_abiquiu_supplement_recovers_absent_months_without_overriding_ghcn(monkeypatch):
+    slots = ["-9999   "] * 31
+    slots[30] = f"{306:5d} S0"  # GHCN rejected this value, despite ACIS supplying it.
+    text = "USC00290041202401TMAX" + "".join(slots)
+    rows = reference.noaa_rows(text, date(2024, 1, 31), date(2024, 2, 2))
+    response = {
+        "meta": {"sids": ["USC00290041 6"]},
+        "data": [
+            ["2024-01-31", ["32", " "], ["87", " "], ["0.10", " "]],
+            ["2024-02-01", ["14", " "], ["50", " "], ["T", "T"]],
+            ["2024-02-02", ["M", "M"], ["M", "M"], ["0.50", "S"]],
+        ],
+    }
+    monkeypatch.setattr(reference, "download", lambda url: json.dumps(response))
+    reference.supplement_abiquiu(text, rows, date(2024, 1, 31), date(2024, 2, 2))
+    assert "temperature_max_c" not in rows[date(2024, 1, 31)]
+    recovered = rows[date(2024, 2, 1)]
+    assert recovered["temperature_min_c"] == -10
+    assert recovered["temperature_max_c"] == 10
+    assert recovered["rain_mm"] == 0 and recovered["precipitation_trace"]
+    assert recovered["field_sources"] == {field: "rcc-acis" for field in reference.FIELDS.values()}
+    assert date(2024, 2, 2) not in rows
+    response["data"].pop()
+    with pytest.raises(ValueError, match="Incomplete"):
+        reference.supplement_abiquiu(text, rows, date(2024, 1, 31), date(2024, 2, 2))
+    response["meta"]["sids"] = ["USW00023050 6"]
+    with pytest.raises(ValueError, match="different station"):
+        reference.supplement_abiquiu(text, rows, date(2024, 1, 31), date(2024, 2, 2))
+
+
+def test_precipitation_only_reference_keeps_temperature_missing():
+    day = date(2025, 7, 1)
+    data = document({"id": "madrid"}, {day: {"rain_mm": 2.54}}, day, day)
+    assert data["daily"][0]["rain_mm"] == 2.54
+    assert data["daily"][0]["temperature_min_c"] is None
+    assert data["daily"][0]["temperature_max_c"] is None

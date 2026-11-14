@@ -4,6 +4,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import re
 import sys
 from datetime import date, datetime, time, timedelta, timezone
@@ -15,8 +16,30 @@ from zoneinfo import ZoneInfo
 from canones_weather.jsonio import write_json
 
 ZONE = ZoneInfo("America/Denver")
-NOAA_ID = "USC00290041"
-NOAA_URL = f"https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{NOAA_ID}.dly"
+NOAA_STATIONS = {
+    "abiquiu": {
+        "name": "Abiquiu Dam · NOAA + RCC-ACIS observations",
+        "station_id": "USC00290041",
+        "latitude": 36.2403,
+        "longitude": -106.4278,
+        "elevation_m": 1944.6,
+    },
+    "albuquerque": {
+        "name": "Albuquerque airport · NOAA observations",
+        "station_id": "USW00023050",
+        "latitude": 35.0419,
+        "longitude": -106.6156,
+        "elevation_m": 1618.5,
+    },
+    "madrid": {
+        "name": "Madrid 1.9 SE · NOAA/CoCoRaHS precipitation",
+        "station_id": "US1NMSF0189",
+        "latitude": 35.3845,
+        "longitude": -106.1301,
+        "elevation_m": 1923.6,
+    },
+}
+ACIS_URL = "https://data.rcc-acis.org/StnData"
 DAYMET_URL = "https://daymet.ornl.gov/single-pixel/api/data"
 FIELDS = {"TMIN": "temperature_min_c", "TMAX": "temperature_max_c", "PRCP": "rain_mm"}
 
@@ -27,10 +50,10 @@ def download(url):
         return response.read().decode()
 
 
-def noaa_rows(text, start, end):
+def noaa_rows(text, start, end, station_id="USC00290041"):
     rows = {}
     for line in text.splitlines():
-        if line[:11] != NOAA_ID:
+        if line[:11] != station_id:
             raise ValueError("Unexpected NOAA station")
         year, month, element = int(line[11:15]), int(line[15:17]), line[17:21]
         if element not in FIELDS or not start.year <= year <= end.year:
@@ -50,6 +73,51 @@ def noaa_rows(text, start, end):
                 if element == "PRCP" and measurement == "T":
                     row["precipitation_trace"] = True
     return rows
+
+
+def supplement_abiquiu(text, rows, start, end):
+    # Only absent monthly records are eligible; never override GHCN QC or explicit missing days.
+    reported = {(int(line[11:15]), int(line[15:17]), line[17:21]) for line in text.splitlines()}
+    station_id = NOAA_STATIONS["abiquiu"]["station_id"]
+    params = {
+        "sid": f"{station_id} 6",
+        "sdate": start.isoformat(),
+        "edate": end.isoformat(),
+        "elems": [{"name": name, "add": "f"} for name in ["mint", "maxt", "pcpn"]],
+        "meta": "sids,name,ll,elev",
+    }
+    url = ACIS_URL + "?" + urlencode({"params": json.dumps(params)})
+    data = json.loads(download(url))
+    if f"{station_id} 6" not in data.get("meta", {}).get("sids", []):
+        raise ValueError("ACIS returned a different station")
+    previous = start - timedelta(days=1)
+    for record in data["data"]:
+        day = date.fromisoformat(record[0])
+        if day != previous + timedelta(days=1) or day > end:
+            raise ValueError("Invalid ACIS reporting dates")
+        previous = day
+        for element, (value, flag) in zip(["TMIN", "TMAX", "PRCP"], record[1:], strict=True):
+            if (day.year, day.month, element) in reported or flag.strip() not in ["", "T"]:
+                continue
+            if flag == "T" and element != "PRCP":
+                continue
+            converted = 0.0 if value == "T" else float(value)
+            converted = converted * 25.4 if element == "PRCP" else (converted - 32) * 5 / 9
+            if not math.isfinite(converted) or (element == "PRCP" and converted < 0):
+                raise ValueError("Invalid ACIS observation")
+            field = FIELDS[element]
+            row = rows.setdefault(day, {})
+            row[field] = round(converted, 4)
+            row.setdefault("field_sources", {})[field] = "rcc-acis"
+            if flag == "T":
+                row["precipitation_trace"] = True
+    if previous != end:
+        raise ValueError("Incomplete ACIS reporting calendar")
+    return {
+        "provider": "RCC-ACIS",
+        "download_url": url,
+        "notes": "Same-station supplemental reports for months absent from GHCN. May include preliminary data. GHCN values, QC exclusions and explicit missing days take precedence; no estimates or other stations fill gaps.",
+    }
 
 
 def daymet_rows(text, start, end):
@@ -89,8 +157,12 @@ def document(source, rows, start, end):
             }
         )
         day += timedelta(days=1)
-    if not any(row["temperature_min_c"] is not None for row in daily):
-        raise ValueError("Reference download contains no temperature data")
+    if not any(row[field] is not None for row in daily for field in FIELDS.values()):
+        raise ValueError("Reference download contains no observations")
+    for row in daily:
+        low, high = row["temperature_min_c"], row["temperature_max_c"]
+        if (low is not None and high is not None and low > high) or (row["rain_mm"] is not None and row["rain_mm"] < 0):
+            raise ValueError("Invalid reference observation range")
     return {
         "schema_version": 1,
         "kind": "reference",
@@ -99,7 +171,7 @@ def document(source, rows, start, end):
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "available_through": max(
-            day for day, values in rows.items() if any(value is not None for value in values.values())
+            day for day, values in rows.items() if any(values.get(field) is not None for field in FIELDS.values())
         ).isoformat(),
         "daily": daily,
     }
@@ -148,43 +220,49 @@ def fetch_reference(key, args):
             "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from Secco Creek. Leap-year December 31 is absent; gaps are preserved.",
         }
     else:
-        rows = noaa_rows(download(NOAA_URL), start, end)
-        end = max(rows)
+        station = NOAA_STATIONS[key]
+        url = f"https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station['station_id']}.dly"
+        text = download(url)
+        rows = noaa_rows(text, start, end, station["station_id"])
         source = {
-            "id": "abiquiu",
-            "name": "Abiquiu Dam · NOAA observations",
+            "id": key,
             "type": "observed",
-            "station_id": NOAA_ID,
+            **station,
             "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
-            "download_url": NOAA_URL,
+            "download_url": url,
             "citation": "https://doi.org/10.7289/V5D21VHZ",
-            "latitude": 36.2403,
-            "longitude": -106.4278,
-            "elevation_m": 1944.6,
-            "notes": "Daily reporting dates may cover non-midnight observation periods. NOAA quality-flagged, missing, and presumed-zero values are excluded; trace precipitation is retained as flagged zero.",
+            "notes": "Regional comparison, not Secco Creek weather. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero.",
         }
+        if key == "abiquiu":
+            source["supplement"] = supplement_abiquiu(text, rows, start, end)
+        start, end = max(start, min(rows)), max(rows)
     return document(source, rows, start, end)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", choices=["daymet", "abiquiu", "both"], default="both")
-    parser.add_argument("--latitude", type=float, required=True)
-    parser.add_argument("--longitude", type=float, required=True)
+    parser.add_argument("--source", choices=["daymet", *NOAA_STATIONS, "all"], default="all")
+    parser.add_argument("--latitude", type=float, help="Station latitude for Daymet")
+    parser.add_argument("--longitude", type=float, help="Station longitude for Daymet")
     parser.add_argument("--start-year", type=int, default=2016)
     parser.add_argument("--end-year", type=int, help="Limit to this completed year; otherwise use available data")
     parser.add_argument("--output", type=Path, default=Path("tmp/reference"))
     parser.add_argument("--publish-config", type=Path, help="Publish validated references to this R2 destination")
     args = parser.parse_args()
-    if not -90 <= args.latitude <= 90 or not -180 <= args.longitude <= 180:
+    needs_daymet = args.source in ["daymet", "all"]
+    if needs_daymet and (args.latitude is None or args.longitude is None):
+        parser.error("Daymet requires --latitude and --longitude")
+    if (args.latitude is not None and not -90 <= args.latitude <= 90) or (
+        args.longitude is not None and not -180 <= args.longitude <= 180
+    ):
         parser.error("Invalid coordinates")
-    if not 1980 <= args.start_year <= (args.end_year or date.today().year) or (
+    if not (1980 if needs_daymet else 1) <= args.start_year <= (args.end_year or date.today().year) or (
         args.end_year and args.end_year >= date.today().year
     ):
         parser.error("Invalid year range; an explicit end year must be completed")
     config = json.loads(args.publish_config.read_text()) if args.publish_config else None
     failed = False
-    for key in ["daymet", "abiquiu"] if args.source == "both" else [args.source]:
+    for key in ["daymet", *NOAA_STATIONS] if args.source == "all" else [args.source]:
         try:
             data = fetch_reference(key, args)
             body = write_json(args.output / f"{key}.json", data)
