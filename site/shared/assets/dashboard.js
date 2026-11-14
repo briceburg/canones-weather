@@ -43,6 +43,7 @@ const state = {
   viewport: null,
   controls: new Set(["daymet"]),
   showReferences: true,
+  showStation: true,
   references: {},
   referenceCheckedAt: {},
   controlErrors: new Set(),
@@ -306,11 +307,14 @@ function renderChart() {
     );
     return seasonal ? seasonalRows(selectedRows, state.period === "monsoon") : selectedRows;
   };
-  let rows = selectRows(history);
+  let rows = state.showStation ? selectRows(history) : [];
   const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : "Secco Creek";
-  $("history-subtitle").textContent =
-    `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`;
+  $("station-history-label").textContent = state.mode === "sample"
+    ? "Show sample observations" : "Show station observations";
+  $("history-subtitle").textContent = state.showStation
+    ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
+    : "Station observations hidden · Mountain Time";
   $("history-resolution").textContent =
     seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
   const eligible = (daily || seasonal) && ["temperature", "rain"].includes(state.metric);
@@ -327,8 +331,8 @@ function renderChart() {
   const referenceNames = [...state.controls].map((key) =>
     key === "daymet" ? "Daymet estimate" : "Abiquiu NOAA");
   $("reference-summary").textContent = showReferences && referenceNames.length
-    ? `${referenceNames.join(" + ")} · Change reference sources ↓`
-    : "Reference history settings ↓";
+    ? `${referenceNames.join(" + ")} · Change chart sources ↓`
+    : "Chart source settings ↓";
   const selectedReferences = showReferences
     ? [...state.controls].map((key) => state.references[key]).filter(Boolean) : [];
   const comparisons = selectedReferences.map((data) => ({
@@ -345,7 +349,7 @@ function renderChart() {
   if (showReferences && state.controls.size) {
     $("history-subtitle").textContent = stationInWindow
       ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
-      : "Reference history only · no station observations in this window · Mountain Time";
+      : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
     $("control-note").textContent += " Reference coverage may end before the selected window; missing days are not filled.";
   }
   if (seasonal && comparisons.length) {
@@ -375,8 +379,9 @@ function renderChart() {
     chart.clear();
     chart.setOption({
       title: {
-        text: state.loading
-          ? "Loading history…"
+        text: !state.showStation && (!state.showReferences || !state.controls.size)
+          ? "Choose observations or\nreference history to display."
+          : state.loading ? "Loading history…"
           : state.metric === "solar" ? "No solar observations in this period." : seasonal ? "Seasonal comparisons need daily history." : "No observations in this period.",
         left: "center",
         top: "center",
@@ -445,7 +450,7 @@ function renderChart() {
       }, item.rows));
     }
   }
-  if (comparisons.length && series.length && !seasonal && timestamp(history?.record_started_at)) {
+  if (comparisons.length && stationHasData && !seasonal && timestamp(history?.record_started_at)) {
     series[0].markLine = {
       symbol: "none", lineStyle: {color: "#e4b17b", type: "dashed"},
       data: [{xAxis: Date.parse(history.record_started_at), name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
@@ -565,12 +570,12 @@ function renderChart() {
   if (state.metric === "temperature" && !recent)
     $("chart-description").textContent += " Warm colors show highs; cool colors show lows. Station lines are solid, Daymet dashed, and Abiquiu dotted.";
   if (comparisons.length)
-    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : " No local daily values are available in this view yet; only the selected controls are shown."}`;
+    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : ` ${state.showStation ? "No local daily values are available in this view yet" : "Station observations are hidden"}; only the selected controls are shown.`}`;
   if (state.metric === "solar")
     $("chart-description").textContent += " Solar means include nighttime readings. Sun angle, day length, shading, smoke, and clouds affect this light-derived estimate; it is not cloud-cover percentage.";
   $("chart").setAttribute(
     "aria-label",
-    `${stationName}${comparisons.length ? " and reference" : ""} ${label.toLowerCase()} chart. ${range}`,
+    `${state.showStation ? stationName + (comparisons.length ? " and reference" : "") : "Reference history"} ${label.toLowerCase()} chart. ${range}`,
   );
 }
 async function load({ refresh = false } = {}) {
@@ -679,6 +684,11 @@ async function loadReference(key) {
   }
   renderChart();
 }
+$("show-station-history").addEventListener("change", (event) => {
+  state.showStation = event.target.checked;
+  if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
+  renderChart();
+});
 $("show-reference-history").addEventListener("change", (event) => {
   state.showReferences = event.target.checked;
   if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
