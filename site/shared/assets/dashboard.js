@@ -42,7 +42,6 @@ const state = {
   loading: false,
   viewport: null,
   controls: new Set(["daymet"]),
-  showReferences: true,
   showStation: true,
   references: {},
   referenceCheckedAt: {},
@@ -310,8 +309,6 @@ function renderChart() {
   let rows = state.showStation ? selectRows(history) : [];
   const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : "Secco Creek";
-  $("station-history-label").textContent = state.mode === "sample"
-    ? "Show sample observations" : "Show station observations";
   $("history-subtitle").textContent = state.showStation
     ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
     : "Station observations hidden · Mountain Time";
@@ -322,15 +319,13 @@ function renderChart() {
   const windowEnd = state.viewport?.to ?? end;
   const stationInWindow = rows.some((row) => numeric(row[field]) &&
     (seasonal || (Date.parse(row.at) >= windowStart && Date.parse(row.at) <= windowEnd)));
-  const showReferences = eligible && state.showReferences;
-  for (const input of document.querySelectorAll("[data-control]"))
-    input.disabled = !state.showReferences;
+  const showReferences = eligible && state.controls.size > 0;
   if (showReferences)
     for (const key of state.controls)
       if (!state.referenceCheckedAt[key]) loadReference(key);
   const referenceNames = [...state.controls].map((key) =>
     key === "daymet" ? "Daymet estimate" : "Abiquiu NOAA");
-  $("reference-summary").textContent = showReferences && referenceNames.length
+  $("reference-summary").textContent = showReferences
     ? `${referenceNames.join(" + ")} · Change chart sources ↓`
     : "Chart source settings ↓";
   const selectedReferences = showReferences
@@ -339,14 +334,13 @@ function renderChart() {
     source: data.source,
     rows: selectRows(data),
   }));
-  $("control-note").textContent = !state.showReferences ? "Reference history is hidden. Your source selections are preserved."
-    : [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
+  $("control-note").textContent = [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
     : !eligible ? "Controls compare daily temperature ranges and precipitation in 30d, 1y, 3y, All, Seasons, or Monsoon."
     : state.controls.size > selectedReferences.length ? "Loading historical controls…"
     : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
       " Separate reference records; neither establishes past conditions at Secco Creek."
     : "Choose a control to overlay daily temperature ranges or precipitation; station observations remain separate.";
-  if (showReferences && state.controls.size) {
+  if (showReferences) {
     $("history-subtitle").textContent = stationInWindow
       ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
       : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
@@ -379,7 +373,7 @@ function renderChart() {
     chart.clear();
     chart.setOption({
       title: {
-        text: !state.showStation && (!state.showReferences || !state.controls.size)
+        text: !state.showStation && !state.controls.size
           ? "Choose observations or\nreference history to display."
           : state.loading ? "Loading history…"
           : state.metric === "solar" ? "No solar observations in this period." : seasonal ? "Seasonal comparisons need daily history." : "No observations in this period.",
@@ -689,34 +683,16 @@ $("show-station-history").addEventListener("change", (event) => {
   if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
   renderChart();
 });
-$("show-reference-history").addEventListener("change", (event) => {
-  state.showReferences = event.target.checked;
-  if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
-  renderChart();
-});
 for (const input of document.querySelectorAll("[data-control]")) {
-  input.addEventListener("change", async () => {
+  input.addEventListener("change", () => {
     const key = input.dataset.control;
     if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
+    if (input.checked) {
+      state.controls.add(key);
+      if (state.controlErrors.has(key) || Date.now() - state.referenceCheckedAt[key] >= 3600000)
+        delete state.referenceCheckedAt[key];
+    } else state.controls.delete(key);
     state.controlErrors.delete(key);
-    if (!input.checked) {
-      state.controls.delete(key);
-      renderChart();
-      return;
-    }
-    state.controls.add(key);
-    if (!["month", "year", "three-years", "all", "seasons", "monsoon"].includes(state.period)) {
-      state.period = "all";
-      state.viewport = null;
-      selected("period", state.period);
-    }
-    if (!["temperature", "rain"].includes(state.metric)) {
-      state.metric = "temperature";
-      selected("metric", state.metric);
-    }
-    renderChart();
-    if (!state.references[key] || Date.now() - state.referenceCheckedAt[key] >= 3600000)
-      await loadReference(key);
     renderChart();
   });
 }
@@ -724,7 +700,7 @@ new ResizeObserver(() => chart.resize()).observe($("chart"));
 setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
-  for (const key of state.showReferences ? state.controls : [])
+  for (const key of state.controls)
     if (Date.now() - state.referenceCheckedAt[key] >= 3600000) loadReference(key);
 }, 300000);
 await load();

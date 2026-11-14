@@ -848,3 +848,11 @@ p {
 
 .reference-summary { margin: 10px 0; color: var(--muted); }
 #reference-controls { scroll-margin-top: 24px; }
+
+.reference-sources {
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 10px 0 0;
+  padding: 6px 0 0;
+}

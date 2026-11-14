@@ -270,11 +270,13 @@
           ></div>
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
-            <label><input type="checkbox" id="show-station-history" checked /> <span id="station-history-label">Show sample observations</span></label>
-            <label><input type="checkbox" id="show-reference-history" checked /> Show reference history</label>
-            <br />
-            <label><input type="checkbox" data-control="daymet" checked /> Daymet · Cañones grid estimate</label>
-            <label><input type="checkbox" data-control="abiquiu" /> Abiquiu Dam · NOAA observations</label>
+            <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
+            <fieldset class="reference-sources">
+              <legend>Reference history</legend>
+              <label><input type="checkbox" data-control="daymet" checked /> <span>Daymet <span class="muted">— reference · modeled at Cañones</span></span></label>
+              <label><input type="checkbox" data-control="abiquiu" /> <span>Abiquiu Dam <span class="muted">— reference · NOAA observations</span></span></label>
+              <p class="small">Independent sources for comparison; station gaps remain unfilled.</p>
+            </fieldset>
             <p id="control-note" class="small" aria-live="polite">Controls compare daily temperature ranges and precipitation. Each source stays separate.</p>
             <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
           </fieldset>
