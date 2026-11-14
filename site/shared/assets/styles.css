@@ -323,12 +323,27 @@ p {
 .station-header p {
   margin: 0;
 }
+.station-identity {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.station-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+.station-header .station-tagline {
+  margin-left: auto;
+  text-align: right;
+}
 .station-header .station-clock {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 14px;
-  margin: 0 0 12px;
 }
 .station-clock time {
   font-size: clamp(1.2rem, 2.5vw, 1.55rem);
