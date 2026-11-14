@@ -462,14 +462,13 @@ function renderChart() {
       },
       aria: { enabled: true },
       grid: { left: 10, right: 16, top: 34, bottom: seasonal ? 70 : 52, containLabel: true },
+      // ECharts needs the toolbox mounted for native drag selection.
       toolbox: {
-        left: 0, top: 0,
-        iconStyle: {borderColor: "#a1b0ab"},
-        emphasis: {iconStyle: {borderColor: "#e4b17b"}},
-        feature: {dataZoom: {yAxisIndex: "none", title: {zoom: "Select a period", back: "Zoom back"}}},
+        itemSize: 0, itemGap: 0, showTitle: false,
+        feature: {dataZoom: {yAxisIndex: "none"}},
       },
       legend: {
-        left: 70,
+        left: 0,
         type: "scroll",
         pageTextStyle: {color: "#a1b0ab"},
         show: series.length > 1,
