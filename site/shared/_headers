@@ -1,0 +1,3 @@
+# Prevent proxy modification, including automatic analytics beacon injection.
+/*
+  Cache-Control: public, no-transform

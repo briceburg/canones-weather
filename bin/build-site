@@ -7,5 +7,6 @@ for name in hub canones; do
   mkdir -p "dist/$name"
   cp -R "site/$name/." "dist/$name/"
   cp -R site/shared/assets "dist/$name/"
+  cp site/shared/_headers "dist/$name/"
 done
 printf 'Built dist/hub and dist/canones\n'
