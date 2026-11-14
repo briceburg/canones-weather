@@ -51,7 +51,7 @@ enter WeeWX or Wunderground/CWOP submissions.
 
 ## Retrieved comparison
 
-The bundled controls cover 2016–2025. A comparison retrieved in November 2026,
+A comparison of 2016–2025 retrieved in November 2026,
 using dates available in both sources and the NOAA exclusions above, found:
 
 | Statistic, Daymet minus Abiquiu | Matched days | Difference |
@@ -74,22 +74,41 @@ not necessarily an independent model validation.
 ## Refreshing controls
 
 Both provider downloads are free and the command needs no credentials. The
-bundled JSON records download URLs, citations, elevations, retrieval time, and
+published JSON records download URLs, citations, elevations, retrieval time, and
 source notes. Retain those attributions when redistributing it; the repository's
 software license does not replace provider data terms.
 
 ```sh
 uv run python -m canones_weather.reference \
   --latitude 36.150028 --longitude=-106.445500 \
-  --start-year 2016 --end-year 2025
-bin/build-site
+  --start-year 2016 --output tmp/reference
+# To publish, add --publish-config tmp/publisher.json and provide bucket-scoped credentials.
 ```
 
-The command downloads both datasets before replacing the bundled files. It does
-not run during a Pages build, contact the gateway, or modify the station archive.
-Select completed years available from Daymet; availability can lag the calendar.
-Review changed data and coverage in a PR when refreshing. Files are hosted with
-the static site, independently of the Pi's current/history publisher.
+Controls are generated outside Git and served from the configured R2 reference
+feed, independently of Pages builds. The local default output is ignored
+`tmp/reference/`. Use `--source abiquiu` or `--source daymet` to refresh one source;
+failures in one source do not prevent processing the other. Each validated file
+replaces its own R2 object only on successful upload; the last published data
+survives a failed refresh. Missing or invalid downloads are not published.
+
+Without an end-year limit, NOAA uses the latest available reporting date and
+Daymet requests its published years. Daymet updates after a calendar year closes,
+so it cannot be a current-year control. `available_through` describes data
+availability; `retrieved_at` describes the download time. The dashboard shows
+coverage dates and revalidates selected controls periodically in both modes.
+
+[The reference workflow](../.github/workflows/reference-data.yml) checks both
+providers daily and supports manual dispatch. Its independent matrix jobs do
+not run on the Pi or modify the weather archive. Configure repository secrets
+`R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` with the existing bucket-scoped
+publisher key, and repository variable `R2_PUBLISHER_CONFIG` with the non-secret
+OpenTofu publisher output. Keep source downloads out of Git.
+
+GitHub can disable public-repository schedules after 60 days without repository
+activity. Watch workflow results and configure GitHub failure notifications;
+manual dispatch is available after re-enabling a disabled schedule. Do not create
+artificial commits as a keepalive. A fresh download cannot remove provider lag.
 
 ## Provider links
 

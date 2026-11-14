@@ -28,6 +28,7 @@ const state = {
   loading: false,
   controls: new Set(),
   references: {},
+  referenceCheckedAt: {},
   controlErrors: new Set(),
 };
 let requestId = 0;
@@ -261,10 +262,12 @@ function renderChart() {
   const days = { day: 1, week: 7, month: 30, year: 365, all: Infinity }[
     state.period
   ];
-  const selectRows = (data) => seasonal ? seasonalRows(data?.daily ?? [], state.period === "monsoon") :
-    (data?.[daily ? "daily" : recent ? "recent" : "hourly"] ?? []).filter(
-      (row) => Date.parse(row.at) > end - days * 86400000 && Date.parse(row.at) <= end,
+  const selectRows = (data) => {
+    const selectedRows = (data?.[daily || seasonal ? "daily" : recent ? "recent" : "hourly"] ?? []).filter(
+      (row) => Date.parse(row.at) <= end && (seasonal || Date.parse(row.at) > end - days * 86400000),
     );
+    return seasonal ? seasonalRows(selectedRows, state.period === "monsoon") : selectedRows;
+  };
   let rows = selectRows(history);
   const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : "Secco Creek";
@@ -278,10 +281,10 @@ function renderChart() {
     source: data.source,
     rows: selectRows(data),
   })) : [];
-  $("control-note").textContent = state.controlErrors.size ? "A control could not be loaded. Station data remains independent; uncheck and retry."
+  $("control-note").textContent = [...state.controls].some((key) => state.controlErrors.has(key)) ? "A control could not be loaded. Station data remains independent; uncheck and retry."
     : !eligible ? "Controls compare daily temperature ranges and precipitation in 1y, All, Seasons, or Monsoon."
     : state.controls.size > selectedReferences.length ? "Loading historical controls…"
-    : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
+    : selectedReferences.length ? selectedReferences.map((data) => `${data.source.name}: ${data.start_date}–${data.available_through ?? data.end_date}, ${Math.round(data.source.elevation_m)} m elevation.`).join(" ") +
       " Separate reference records; neither establishes past conditions at Secco Creek."
     : "Choose a control to overlay daily temperature ranges or precipitation; station observations remain separate.";
   if (seasonal && comparisons.length) {
@@ -579,6 +582,16 @@ for (const group of ["metric", "period", "units", "mode"]) {
       }
     });
 }
+async function loadReference(key) {
+  state.referenceCheckedAt[key] = Date.now();
+  try {
+    state.references[key] = validReference(await readJSON(new URL(`${key}.json`, settings.reference_feed), AbortSignal.timeout(15000)), key);
+    state.controlErrors.delete(key);
+  } catch {
+    state.controlErrors.add(key);
+  }
+  renderChart();
+}
 for (const input of document.querySelectorAll("[data-control]")) {
   input.addEventListener("change", async () => {
     const key = input.dataset.control;
@@ -598,13 +611,8 @@ for (const input of document.querySelectorAll("[data-control]")) {
       selected("metric", state.metric);
     }
     renderChart();
-    if (!state.references[key]) {
-      try {
-        state.references[key] = validReference(await readJSON(new URL(`../data/reference/${key}.json`, import.meta.url), AbortSignal.timeout(15000)), key);
-      } catch {
-        state.controlErrors.add(key);
-      }
-    }
+    if (!state.references[key] || Date.now() - state.referenceCheckedAt[key] >= 3600000)
+      await loadReference(key);
     renderChart();
   });
 }
@@ -612,5 +620,7 @@ new ResizeObserver(() => chart.resize()).observe($("chart"));
 setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
+  for (const key of state.controls)
+    if (Date.now() - state.referenceCheckedAt[key] >= 3600000) loadReference(key);
 }, 300000);
 await load();

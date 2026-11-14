@@ -12,7 +12,7 @@ from botocore.config import Config
 log = logging.getLogger(__name__)
 
 
-def publish(config):
+def publishing_client(config):
     endpoint = urlsplit(config["endpoint_url"])
     if (
         endpoint.scheme != "https"
@@ -20,6 +20,15 @@ def publish(config):
         or not endpoint.hostname.endswith(".r2.cloudflarestorage.com")
     ):
         raise ValueError("Publisher endpoint must be an R2 HTTPS origin")
+    return boto3.client(
+        "s3",
+        endpoint_url=config["endpoint_url"],
+        region_name="auto",
+        config=Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 3}),
+    )
+
+
+def publish(config):
     root = Path(config["source_root"])
     payloads = {name: (root / f"{name}.json").read_bytes() for name in ["history", "current"]}
     documents = {name: json.loads(body) for name, body in payloads.items()}
@@ -41,12 +50,7 @@ def publish(config):
             raise ValueError("Production observations require verified provenance")
     else:
         raise ValueError("Unknown deployment phase")
-    client = boto3.client(
-        "s3",
-        endpoint_url=config["endpoint_url"],
-        region_name="auto",
-        config=Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 3}),
-    )
+    client = publishing_client(config)
     prefix = config["key_prefix"].strip("/")
     for name, body in payloads.items():
         client.put_object(

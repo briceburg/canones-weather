@@ -4,7 +4,10 @@ import argparse
 import csv
 import io
 import json
+import os
 import re
+import sys
+import tempfile
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -95,42 +98,47 @@ def document(source, rows, start, end):
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
+        "available_through": max(
+            day for day, values in rows.items() if any(value is not None for value in values.values())
+        ).isoformat(),
         "daily": daily,
     }
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--latitude", type=float, required=True)
-    parser.add_argument("--longitude", type=float, required=True)
-    parser.add_argument("--start-year", type=int, default=2016)
-    parser.add_argument("--end-year", type=int, default=2025)
-    parser.add_argument("--output", type=Path, default=Path("site/canones/data/reference"))
-    args = parser.parse_args()
-    if not -90 <= args.latitude <= 90 or not -180 <= args.longitude <= 180:
-        parser.error("Invalid coordinates")
-    if not 1980 <= args.start_year <= args.end_year < date.today().year:
-        parser.error("Select completed calendar years from 1980 onward")
-    start, end = date(args.start_year, 1, 1), date(args.end_year, 12, 31)
-    url = (
-        DAYMET_URL
-        + "?"
-        + urlencode(
-            {
-                "lat": args.latitude,
-                "lon": args.longitude,
-                "vars": "tmax,tmin,prcp",
-                "years": ",".join(str(y) for y in range(args.start_year, args.end_year + 1)),
-                "format": "csv",
-            }
+def fetch_reference(key, args):
+    start = date(args.start_year, 1, 1)
+    end = date(args.end_year, 12, 31) if args.end_year else date.today() - timedelta(days=1)
+    citation, elevation = None, None
+    if key == "daymet":
+        url = (
+            DAYMET_URL
+            + "?"
+            + urlencode(
+                {
+                    "lat": args.latitude,
+                    "lon": args.longitude,
+                    "vars": "tmax,tmin,prcp",
+                    **(
+                        {"years": ",".join(str(y) for y in range(args.start_year, args.end_year + 1))}
+                        if args.end_year
+                        else {}
+                    ),
+                    "format": "csv",
+                }
+            )
         )
-    )
-    daymet_text = download(url)
-    citation = re.search(r"https://doi\.org/[^\s;]+", daymet_text)
-    if citation is None:
-        raise ValueError("Daymet response is missing its dataset citation")
-    daymet, elevation = daymet_rows(daymet_text, start, end)
-    noaa = noaa_rows(download(NOAA_URL), start, end)
+        text = download(url)
+        citation = re.search(r"https://doi\.org/[^\s;]+", text)
+        if citation is None:
+            raise ValueError("Daymet response is missing its dataset citation")
+        rows, elevation = daymet_rows(text, start, end)
+        latest_year = max(rows).year
+        if args.end_year and latest_year < args.end_year:
+            raise ValueError("Requested Daymet year is not available")
+        end = date(latest_year, 12, 31)
+    else:
+        rows = noaa_rows(download(NOAA_URL), start, end)
+        end = max(rows)
     sources = {
         "daymet": (
             {
@@ -138,14 +146,14 @@ def main():
                 "name": "Daymet · Cañones grid estimate",
                 "type": "modeled",
                 "url": "https://daymet.ornl.gov/",
-                "download_url": url,
-                "citation": citation.group(),
+                "download_url": url if key == "daymet" else None,
+                "citation": citation.group() if citation else None,
                 "latitude": args.latitude,
                 "longitude": args.longitude,
                 "elevation_m": elevation,
                 "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from Secco Creek. Leap-year December 31 is absent; gaps are preserved.",
             },
-            daymet,
+            rows,
         ),
         "abiquiu": (
             {
@@ -161,15 +169,66 @@ def main():
                 "elevation_m": 1944.6,
                 "notes": "Daily reporting dates may cover non-midnight observation periods. NOAA quality-flagged, missing, and presumed-zero values are excluded; trace precipitation is retained as flagged zero.",
             },
-            noaa,
+            rows,
         ),
     }
-    documents = {key: document(source, rows, start, end) for key, (source, rows) in sources.items()}
-    args.output.mkdir(parents=True, exist_ok=True)
-    for key, data in documents.items():
-        (args.output / f"{key}.json").write_text(json.dumps(data, separators=(",", ":"), allow_nan=False) + "\n")
-        print(f"{key}: {len(data['daily'])} calendar days, {start} through {end}")
+    source, _ = sources[key]
+    return document(source, rows, start, end)
+
+
+def save(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = (json.dumps(data, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+            temporary = stream.name
+            stream.write(body)
+        os.replace(temporary, path)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
+    return body
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", choices=["daymet", "abiquiu", "both"], default="both")
+    parser.add_argument("--latitude", type=float, required=True)
+    parser.add_argument("--longitude", type=float, required=True)
+    parser.add_argument("--start-year", type=int, default=2016)
+    parser.add_argument("--end-year", type=int, help="Limit to this completed year; otherwise use available data")
+    parser.add_argument("--output", type=Path, default=Path("tmp/reference"))
+    parser.add_argument("--publish-config", type=Path, help="Publish validated references to this R2 destination")
+    args = parser.parse_args()
+    if not -90 <= args.latitude <= 90 or not -180 <= args.longitude <= 180:
+        parser.error("Invalid coordinates")
+    if not 1980 <= args.start_year <= (args.end_year or date.today().year) or (
+        args.end_year and args.end_year >= date.today().year
+    ):
+        parser.error("Invalid year range; an explicit end year must be completed")
+    config = json.loads(args.publish_config.read_text()) if args.publish_config else None
+    failed = False
+    for key in ["daymet", "abiquiu"] if args.source == "both" else [args.source]:
+        try:
+            data = fetch_reference(key, args)
+            body = save(args.output / f"{key}.json", data)
+            if config:
+                from canones_weather.publish import publishing_client
+
+                publishing_client(config).put_object(
+                    Bucket=config["bucket"],
+                    Key=f"{config['key_prefix'].strip('/')}/reference/{key}.json",
+                    Body=body,
+                    ContentType="application/json",
+                    CacheControl="public, max-age=3600",
+                )
+            print(f"{key}: {data['start_date']} through {data['end_date']}")
+        except Exception as error:
+            print(f"{key} refresh failed: {error}", file=sys.stderr)
+            failed = True
+    return int(failed)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

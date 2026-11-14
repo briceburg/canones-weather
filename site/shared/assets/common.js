@@ -13,6 +13,7 @@ const localPreview = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostn
 export const settings = {
   ...config,
   default_mode: environment?.default_mode ?? config.default_mode,
+  reference_feed: environment?.reference_feed ?? config.reference_feed,
   feed: environment?.data ?? (localPreview ? config.environments.prod.data : null),
 };
 for (const link of document.querySelectorAll("[data-route]")) {

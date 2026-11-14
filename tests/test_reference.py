@@ -43,3 +43,26 @@ year,yday,prcp (mm/day),tmax (deg c),tmin (deg c)
         "rain_mm": None,
     }
     assert "temperature_c" not in data["daily"][-2]  # No invented daily mean.
+
+
+def test_failed_provider_preserves_its_cache_and_does_not_stop_peer(tmp_path, monkeypatch):
+    import sys
+
+    from canones_weather import reference
+
+    prior = tmp_path / "daymet.json"
+    prior.write_text("previous validated snapshot\n")
+    data = document(
+        {"id": "abiquiu"}, {date(2025, 1, 1): {"temperature_min_c": 1.0}}, date(2025, 1, 1), date(2025, 1, 1)
+    )
+
+    def fetch(key, args):
+        if key == "daymet":
+            raise OSError("Provider unavailable")
+        return data
+
+    monkeypatch.setattr(reference, "fetch_reference", fetch)
+    monkeypatch.setattr(sys, "argv", ["reference", "--latitude", "36", "--longitude=-106", "--output", str(tmp_path)])
+    assert reference.main() == 1
+    assert prior.read_text() == "previous validated snapshot\n"
+    assert (tmp_path / "abiquiu.json").exists()

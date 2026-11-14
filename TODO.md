@@ -22,3 +22,10 @@ Investigate Cloudflare error 1010 for Python urllib's default user agent on the
 data hostname. Browser requests and identified clients work. Inspect the
 host-specific security configuration before changing shared zone settings; avoid
 broad account permissions merely to address this exception.
+
+## Reference refresh operations
+
+Watch scheduled reference-workflow results and the providers' actual coverage
+dates. GitHub disables public-repository schedules after 60 days of inactivity;
+re-enable them if needed. Evaluate an external scheduler if that operational
+constraint becomes unsuitable; do not couple reference fetches to local collection.
