@@ -324,6 +324,11 @@ function renderChart() {
   if (showReferences)
     for (const key of state.controls)
       if (!state.referenceCheckedAt[key]) loadReference(key);
+  const referenceNames = [...state.controls].map((key) =>
+    key === "daymet" ? "Daymet estimate" : "Abiquiu NOAA");
+  $("reference-summary").textContent = showReferences && referenceNames.length
+    ? `${referenceNames.join(" + ")} · Change reference sources ↓`
+    : "Reference history settings ↓";
   const selectedReferences = showReferences
     ? [...state.controls].map((key) => state.references[key]).filter(Boolean) : [];
   const comparisons = selectedReferences.map((data) => ({
