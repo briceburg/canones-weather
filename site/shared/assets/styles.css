@@ -820,6 +820,5 @@ p {
 .control-picker input[data-control="daymet"] { accent-color: #b8a3cf; }
 .control-picker input[data-control="abiquiu"] { accent-color: #86b4cb; }
 
-.chart { cursor: grab; }
-.chart:active { cursor: grabbing; }
+.chart { cursor: crosshair; }
 .timeline-help { color: #a1b0ab; margin: 8px 0; }
