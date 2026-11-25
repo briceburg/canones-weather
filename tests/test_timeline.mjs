@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DAY, HOUR, shiftWindow, timeDomain, timelineRange, visibleWindow } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "../site/shared/assets/timeline.js";
 
 test("a live 24h preset ends at now with stale or newly started history", () => {
   const now = Date.UTC(2026, 10, 24, 19, 35);
@@ -20,6 +20,15 @@ test("hourly and daily moves preserve the window width at both edges", () => {
   const earliest = shiftWindow(domain, monthView, -2 * DAY);
   assert.deepEqual(earliest, {from: 0, to: 30 * DAY});
   assert.deepEqual(shiftWindow(domain, earliest, 2 * DAY), monthView);
+});
+
+test("panning a 24h view stays hourly and widening it enables daily comparisons", () => {
+  const domain = {start: 0, end: 31 * DAY};
+  const initial = visibleWindow(domain, timelineRange(domain, 1, null));
+  const earlier = shiftWindow(domain, initial, -2 * HOUR);
+  assert.equal(usesDailyHistory(1, earlier), false);
+  assert.equal(usesDailyHistory(1, {from: earlier.from - 2 * HOUR, to: earlier.to}), true);
+  assert.equal(usesDailyHistory(30, earlier), true);
 });
 
 test("3y presets the latest 1095 days while retaining earlier history for panning", () => {

@@ -1,6 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
-import { DAY, HOUR, shiftWindow, timeDomain, timelineRange, visibleWindow } from "./timeline.js";
+import { DAY, HOUR, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -70,7 +70,9 @@ function rememberViewport(event) {
   if (!timelineDomain || !numeric(zoom?.start) || !numeric(zoom?.end)) return;
   state.viewport = timelineDomain.seasonal ? {start: zoom.start, end: zoom.end} : visibleWindow(timelineDomain, zoom);
   renderPeriodSelection();
-  if (!timelineDomain.seasonal) renderWindow(state.viewport);
+  if (timelineDomain.seasonal) return;
+  if (usesDailyHistory(periodDays[state.period], state.viewport) !== timelineDomain.daily) renderChart();
+  else renderWindow(state.viewport);
 }
 chart.on("datazoom", rememberViewport);
 
@@ -83,7 +85,7 @@ function zoomTo(view) {
 }
 function moveWindow(direction) {
   const view = currentWindow();
-  const offset = direction * (state.period === "day" ? HOUR : DAY);
+  const offset = direction * (timelineDomain.daily ? DAY : HOUR);
   const next = shiftWindow(timelineDomain, view, offset);
   if (next.from !== view.from) zoomTo(next);
 }
@@ -346,12 +348,12 @@ function renderChart() {
   renderPeriodSelection();
   const seasonal = ["seasons", "monsoon"].includes(state.period);
   $("monsoon-source").hidden = state.period !== "monsoon";
-  const daily = state.period !== "day" && !seasonal;
+  const days = periodDays[state.period];
+  const daily = !seasonal && usesDailyHistory(days, state.viewport);
   const history = state.history;
   const resolution = seasonal ? "Seasonal" : daily ? "Daily" : "Hourly";
   const sampleEnd = history?.through ?? state.current?.observed_at;
   const end = state.mode === "sample" && sampleEnd ? Date.parse(sampleEnd) : Date.now();
-  const days = periodDays[state.period];
   const selectRows = (data) => {
     const selectedRows = (data?.[daily || seasonal ? "daily" : "hourly"] ?? []).filter(
       (row) => Date.parse(row.at) <= end,
@@ -366,16 +368,16 @@ function renderChart() {
     : "Station observations hidden · Mountain Time";
   $("history-resolution").textContent =
     seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
-  const eligible = (daily || seasonal) && ["temperature", "rain"].includes(state.metric);
+  const referenceMetric = ["temperature", "rain"].includes(state.metric);
+  const eligible = (daily || seasonal) && referenceMetric;
   const activeControls = eligible ? [...state.controls] : [];
   const showReferences = activeControls.length > 0;
   if (showReferences)
     for (const key of activeControls)
       if (!state.referenceCheckedAt[key]) loadReference(key);
-  const referenceNames = activeControls.map((key) => referenceSources[key].name);
-  $("reference-summary").textContent = showReferences
-    ? `${referenceNames.join(" + ")} · Change chart sources ↓`
-    : state.period === "day" ? "Compare daily sources in 30d or longer ↓" : "Chart source settings ↓";
+  const hourlyReferenceHint = "Expand beyond 24h to compare daily references.";
+  $("reference-summary").textContent = referenceMetric && !eligible
+    ? "Daily references · expand beyond 24h ↓" : "Chart source settings ↓";
   const selectedReferences = showReferences
     ? activeControls.map((key) => state.references[key]).filter(Boolean) : [];
   const comparisons = selectedReferences.map((data) => ({
@@ -384,7 +386,8 @@ function renderChart() {
   }));
   const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
   const hasReferenceValue = (row) => referenceFields.some((key) => numeric(row[key]));
-  let controlNote = !eligible ? "References support temperature and precipitation in 30d and longer views."
+  const controlNote = !referenceMetric ? "References support temperature and precipitation."
+    : !eligible ? hourlyReferenceHint
     : !showReferences ? "Select sources to compare regional weather."
     : activeControls.map((key) => {
       const {name} = referenceSources[key];
@@ -393,13 +396,8 @@ function renderChart() {
       if (!data) return failed ? `${name} could not be loaded. Reselect to retry.` : `Loading ${name}…`;
       const last = data.daily.findLast(hasReferenceValue);
       const coverage = last ? `through ${dateFormat.format(new Date(last.at))}` : "no values for this measurement";
-      return `${name} · ${coverage} · ${Math.round(data.source.elevation_m)} m elevation.${failed ? " Refresh failed." : ""}`;
-    }).join(" ");
-  if (showReferences) {
-    controlNote += " Gaps indicate unreported days.";
-    if (selectedReferences.some((data) => data.source.supplement))
-      controlNote += " Abiquiu includes RCC-ACIS reports, possibly preliminary; daily tooltips identify supplemented values.";
-  }
+      return `${name} · ${coverage}${failed ? " (refresh failed)" : ""}`;
+    }).join(" | ");
   if (seasonal && comparisons.length) {
     const periods = new Map([...rows, ...comparisons.flatMap((item) => item.rows)].map((row) => [row.start, row]));
     const templates = [...periods.values()].sort((a, b) => a.start - b.start);
@@ -418,8 +416,6 @@ function renderChart() {
   $("history-range").textContent = !endpoints.length ? "No history available" : seasonal
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(new Date(endpoints[0].at))} – ${dateFormat.format(new Date(endpoints.at(-1).at))}`;
-  if (comparisons.length && timestamp(history?.record_started_at))
-    controlNote += ` ${state.mode === "sample" ? "Sample station" : "Local archive"} begins ${dateFormat.format(new Date(history.record_started_at))}.`;
   const stationHasData = rows.some((row) => numeric(row[field]));
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
   function describeCoverage(view) {
@@ -432,7 +428,7 @@ function renderChart() {
         ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
         : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
     $("control-note").textContent = controlNote + (comparisons.length && !referenceInWindow
-      ? " No selected control values overlap this window." : "");
+      ? " · No reference observations in this window" : "");
   }
   $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
@@ -522,7 +518,9 @@ function renderChart() {
       label: {formatter: "{b}", color: "#e4b17b", position: "insideEndTop"},
     };
   }
-  timelineDomain = seasonal ? {seasonal: true} : timeDomain(Date.parse(endpoints[0].at), end, days);
+  // Keep the selected dates when switching between hourly and daily records.
+  const first = Math.min(Date.parse(endpoints[0].at), state.viewport?.from ?? Infinity);
+  timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), daily};
   const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : timelineRange(timelineDomain, days, state.viewport);
   renderWindow = (view) => {
     describeCoverage(view);
@@ -625,6 +623,8 @@ function renderChart() {
         {
           type: "slider",
           ...zoom,
+          // Apply a resized 24h window when the handle is released so it can change resolution.
+          realtime: state.period !== "day",
           brushSelect: seasonal,
           showDetail: seasonal,
           // ECharts bases the preview on series extents, which can end before the live axis.
