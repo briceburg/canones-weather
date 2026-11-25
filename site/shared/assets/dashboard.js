@@ -42,6 +42,7 @@ const referenceSources = {
   madrid: {name: "Madrid 1.9 SE", color: "#a1c6ac", line: "solid", rainOnly: true},
 };
 const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
+const minute = HOUR / 60;
 const state = {
   mode: settings.default_mode,
   metric: "temperature",
@@ -70,17 +71,47 @@ function rememberViewport(event) {
 }
 chart.on("datazoom", rememberViewport);
 
-function moveWindow(direction) {
-  if (!timelineDomain || timelineDomain.seasonal) return;
+function currentWindow() {
   const days = periodDays[state.period];
-  const view = visibleWindow(timelineDomain, timelineRange(timelineDomain, days, state.viewport));
+  return visibleWindow(timelineDomain, timelineRange(timelineDomain, days, state.viewport));
+}
+function zoomTo(view) {
+  chart.dispatchAction({type: "dataZoom", ...timelineRange(timelineDomain, periodDays[state.period], view)});
+}
+function moveWindow(direction) {
+  const view = currentWindow();
   const offset = direction * (state.period === "day" ? HOUR : DAY);
   const next = shiftWindow(timelineDomain, view, offset);
-  if (next.from !== view.from)
-    chart.dispatchAction({type: "dataZoom", ...timelineRange(timelineDomain, days, next)});
+  if (next.from !== view.from) zoomTo(next);
 }
 $("timeline-earlier").addEventListener("click", () => moveWindow(-1));
 $("timeline-later").addEventListener("click", () => moveWindow(1));
+$("timeline-dates").addEventListener("toggle", (event) => {
+  if (!event.target.open || !timelineDomain || timelineDomain.seasonal) return;
+  const {from, to} = currentWindow();
+  // A datetime-local field has no timezone. The labels define its values as UTC.
+  $("timeline-from").valueAsNumber = Math.floor(from / minute) * minute;
+  $("timeline-to").valueAsNumber = Math.ceil(to / minute) * minute;
+  $("timeline-dates-error").textContent = "";
+});
+$("timeline-dates-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!timelineDomain || timelineDomain.seasonal) return;
+  const from = $("timeline-from").valueAsNumber;
+  const to = $("timeline-to").valueAsNumber;
+  const error = $("timeline-dates-error");
+  if (!(from < to)) {
+    error.textContent = "Choose an end time after the start time.";
+    return;
+  }
+  if (from >= timelineDomain.end || to <= timelineDomain.start) {
+    error.textContent = "Choose dates that overlap the chart timeline.";
+    return;
+  }
+  error.textContent = from <= timelineDomain.start - minute || to >= timelineDomain.end + minute
+    ? "Range limited to the chart timeline." : "";
+  zoomTo({from, to});
+});
 
 const numeric = (value) => typeof value === "number" && Number.isFinite(value);
 const rounded = (value, decimals = 1) =>
@@ -394,7 +425,7 @@ function renderChart() {
     $("control-note").textContent = controlNote + (comparisons.length && !referenceInWindow
       ? " No selected control values overlap this window." : "");
   }
-  $("timeline-navigation").hidden = seasonal || (!stationHasData && !referenceHasData);
+  $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
     const emptyMessage = !state.showStation && !state.controls.size
@@ -489,7 +520,8 @@ function renderChart() {
     const readings = series.some((item) => item.data.some(([at, value]) => at >= view.from && at <= view.to && numeric(value)));
     const format = daily ? dateFormat : timeFormat;
     const dates = format.formatRange(new Date(view.from), new Date(view.to));
-    $("timeline-window").textContent = `Showing ${dates}${readings ? "" : " · No readings in this window"}`;
+    const summary = `Showing ${dates}${readings ? "" : " · No readings in this window"}`;
+    if ($("timeline-window").textContent !== summary) $("timeline-window").textContent = summary;
     $("timeline-earlier").disabled = view.from <= timelineDomain.start;
     $("timeline-later").disabled = view.to >= timelineDomain.end;
   };
@@ -586,6 +618,8 @@ function renderChart() {
           ...zoom,
           brushSelect: seasonal,
           showDetail: seasonal,
+          // ECharts bases the preview on series extents, which can end before the live axis.
+          showDataShadow: seasonal ? "auto" : false,
           bottom: 4,
           height: 24,
           borderColor: "#35433e",
@@ -704,7 +738,10 @@ for (const group of ["metric", "period", "units", "mode"]) {
   for (const button of document.querySelectorAll(`[data-${group}]`))
     button.addEventListener("click", () => {
       state[group] = button.dataset[group];
-      if (group === "period" || group === "mode") state.viewport = null;
+      if (group === "period" || group === "mode") {
+        state.viewport = null;
+        $("timeline-dates").open = false;
+      }
       if (group === "period" && state.period === "monsoon") {
         state.metric = "rain";
         selected("metric", state.metric);
