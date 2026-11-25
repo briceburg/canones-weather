@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        source: [abiquiu, daymet, albuquerque, madrid]
+        source: [abiquiu, albuquerque, santa-fe]
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -51,5 +51,4 @@ jobs:
         run: >-
           uv run --locked --group station python -m canones_weather.reference
           --source ${{ matrix.source }}
-          --latitude 36.150028 --longitude=-106.445500
           --publish-config tmp/publisher.json
