@@ -287,17 +287,11 @@
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
             <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
-            <fieldset class="reference-sources">
+            <fieldset class="reference-sources" id="reference-sources" aria-describedby="control-note" disabled>
               <legend>Reference history</legend>
-              <label><input type="checkbox" data-control="albuquerque" /> Albuquerque airport</label>
-              <label><input type="checkbox" data-control="santa-fe" /> Santa Fe airport</label>
-              <label><input type="checkbox" data-control="abiquiu" /> Abiquiu Dam</label>
-              <label><input type="checkbox" data-control="charleston" /> <span>Downtown Charleston<span class="muted">, SC</span></span></label>
-              <label><input type="checkbox" data-control="crozier" /> <span>Crozier<span class="muted">, VA</span></span></label>
-              <label><input type="checkbox" data-control="bodega" /> <span>Bodega Marine<span class="muted">, CA</span></span></label>
-              <label><input type="checkbox" data-control="soller" /> <span>Port de Sóller<span class="muted">, Mallorca · © AEMET</span></span></label>
+              <p id="control-note" class="small" aria-live="polite">Widen past 24h or choose 30d to compare daily references.</p>
+              {{ reference_groups }}
             </fieldset>
-            <p id="control-note" class="small" aria-live="polite">Select sources to compare regional weather.</p>
             <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md#station-locations">Sources, coverage &amp; methods ↗</a>
           </fieldset>
           <p class="chart-description" id="chart-description"></p>

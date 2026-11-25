@@ -36,13 +36,14 @@ renderClock();
 setInterval(renderClock, 1000);
 const chart = window.echarts.init($("chart"), null, { renderer: "svg" });
 const referenceSources = {
-  abiquiu: {name: "Abiquiu Dam", color: "#86b4cb", high: "#d9a4bd", low: "#76cbb6", line: "dotted"},
-  albuquerque: {name: "Albuquerque airport", color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
-  "santa-fe": {name: "Santa Fe airport", color: "#cbab8a", high: "#f6a285", low: "#8cd6c6", line: [12, 5]},
-  charleston: {name: "Downtown Charleston", color: "#d6ae9a", high: "#f78979", low: "#9caee7", line: "dashed"},
-  crozier: {name: "Crozier", color: "#d7c58f", high: "#e3a78f", low: "#7cbbdc", line: [10, 3, 2, 3]},
-  bodega: {name: "Bodega Marine", color: "#96beb4", high: "#efc990", low: "#71cbc5", line: [4, 3, 1, 3]},
-  soller: {name: "Port de Sóller", color: "#bfacd7", high: "#e094ad", low: "#afb8e7", line: [6, 5]},
+  abiquiu: {color: "#86b4cb", high: "#d9a4bd", low: "#76cbb6", line: "dotted"},
+  albuquerque: {color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
+  "santa-fe": {color: "#cbab8a", high: "#f6a285", low: "#8cd6c6", line: [12, 5]},
+  charleston: {color: "#d6ae9a", high: "#f78979", low: "#9caee7", line: "dashed"},
+  crozier: {color: "#d7c58f", high: "#e3a78f", low: "#7cbbdc", line: [10, 3, 2, 3]},
+  bodega: {color: "#96beb4", high: "#efc990", low: "#71cbc5", line: [4, 3, 1, 3]},
+  milwaukee: {color: "#a1a9d2", high: "#e2a681", low: "#9ac4ee", line: [3, 3, 9, 3]},
+  soller: {color: "#bfacd7", high: "#e094ad", low: "#afb8e7", line: [6, 5]},
 };
 const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
 const minute = HOUR / 60;
@@ -370,12 +371,12 @@ function renderChart() {
     seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
   const referenceMetric = ["temperature", "rain"].includes(state.metric);
   const eligible = (daily || seasonal) && referenceMetric;
+  $("reference-sources").disabled = !eligible;
   const activeControls = eligible ? [...state.controls] : [];
   const showReferences = activeControls.length > 0;
   if (showReferences)
     for (const key of activeControls)
       if (!state.referenceCheckedAt[key]) loadReference(key);
-  const hourlyReferenceHint = "Expand beyond 24h to compare daily references.";
   $("reference-summary").textContent = referenceMetric && !eligible
     ? "Daily references · expand beyond 24h ↓" : "Chart source settings ↓";
   const selectedReferences = showReferences
@@ -386,8 +387,8 @@ function renderChart() {
   }));
   const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
   const hasReferenceValue = (row) => referenceFields.some((key) => numeric(row[key]));
-  const controlNote = !referenceMetric ? "References support temperature and precipitation."
-    : !eligible ? hourlyReferenceHint
+  const controlNote = !referenceMetric ? "Choose Temperature or Rain to compare references."
+    : !eligible ? "Widen past 24h or choose 30d to compare daily references."
     : !showReferences ? "Select sources to compare regional weather."
     : activeControls.map((key) => {
       const {name} = referenceSources[key];
@@ -427,8 +428,9 @@ function renderChart() {
       $("history-subtitle").textContent = stationInWindow
         ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
         : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
-    $("control-note").textContent = controlNote + (comparisons.length && !referenceInWindow
+    const status = controlNote + (comparisons.length && !referenceInWindow
       ? " · No reference observations in this window" : "");
+    if ($("control-note").textContent !== status) $("control-note").textContent = status;
   }
   $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
@@ -670,14 +672,19 @@ async function load({ refresh = false } = {}) {
     state.mode === "sample"
       ? new URL("./data/sample/", location.href).href
       : settings.feed;
+  state.loading = true;
   if (!refresh) {
     state.current = null;
     state.history = null;
+    renderCurrent();
+    renderChart();
+    selected("mode", state.mode);
+    notice(
+      state.mode === "sample"
+        ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
+        : "Connecting to the station feed…",
+    );
   }
-  state.loading = true;
-  renderCurrent();
-  renderChart();
-  selected("mode", state.mode);
   if (!source) {
     state.loading = false;
     notice(
@@ -691,11 +698,6 @@ async function load({ refresh = false } = {}) {
   }
   $("json-link").href = `${source}current.json`;
   $("json-link").hidden = false;
-  notice(
-    state.mode === "sample"
-      ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
-      : "Connecting to the station feed…",
-  );
   const signal = AbortSignal.timeout(15000);
   const [current, history] = await Promise.allSettled([
     readJSON(`${source}current.json`, signal).then(validCurrent),
@@ -779,9 +781,10 @@ $("show-station-history").addEventListener("change", (event) => {
   renderChart();
 });
 for (const input of document.querySelectorAll("[data-control]")) {
-  input.style.accentColor = referenceSources[input.dataset.control].color;
+  const key = input.dataset.control;
+  referenceSources[key].name = input.dataset.name;
+  input.style.accentColor = referenceSources[key].color;
   input.addEventListener("change", () => {
-    const key = input.dataset.control;
     if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
     if (state.controlErrors.has(key) || Date.now() - state.referenceCheckedAt[key] >= 3600000)
       delete state.referenceCheckedAt[key];
