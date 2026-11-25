@@ -8,6 +8,7 @@
   vars:
     weather_install_root: /opt/canones-weather
     weather_state_root: /var/lib/canones-weather/pilot
+    weather_sd_recovery: true
     weather_station: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../src/canones_weather/station.json') | from_json }}"
     weather_driver_revision: 6876b2ecbab88f825dde1b0b7c5874cb5fd3c25e
     weather_driver_checksum: sha256:b9a29c15e11d7aeb16038a044fde49ad9586b97bb0837e2e43480e99f02521c3
@@ -149,11 +150,6 @@
         state: started
     - name: Apply weather changes
       ansible.builtin.meta: flush_handlers
-    - name: Confirm radio-pad state is unchanged
-      ansible.builtin.command: systemctl show radiopad-player --property=ActiveState --property=MainPID --property=ActiveEnterTimestampMonotonic --value
-      register: weather_radio_after
-      changed_when: false
-      failed_when: weather_radio_after.stdout != weather_radio_before.stdout
     - name: Install gateway SD recovery units
       ansible.builtin.template:
         src: "{{ item }}.j2"
@@ -168,8 +164,13 @@
       ansible.builtin.systemd_service:
         name: canones-weather-recover.timer
         daemon_reload: true
-        enabled: "{{ weather_sd_recovery | default(false) | bool }}"
-        state: "{{ 'started' if weather_sd_recovery | default(false) | bool else 'stopped' }}"
+        enabled: "{{ weather_sd_recovery | bool }}"
+        state: "{{ 'started' if weather_sd_recovery | bool else 'stopped' }}"
+    - name: Confirm radio-pad state is unchanged
+      ansible.builtin.command: systemctl show radiopad-player --property=ActiveState --property=MainPID --property=ActiveEnterTimestampMonotonic --value
+      register: weather_radio_after
+      changed_when: false
+      failed_when: weather_radio_after.stdout != weather_radio_before.stdout
   handlers:
     - name: Restart weather pilot
       ansible.builtin.systemd_service:

@@ -63,10 +63,11 @@ raw gateway response. See [station requirements](../../docs/station.md).
 
 ## Recover missing pilot observations
 
-Set `WEATHER_SD_RECOVERY=1` in the ignored `.env`, source it as shown above, and
-run `bin/pi deploy` to enable the fifteen-minute recovery timer. Take a
-consistent archive backup first. Set the value to `0` and redeploy to stop
-scheduled recovery. The collector can run independently of the timer.
+`bin/pi deploy` enables the fifteen-minute recovery timer by default. Take a
+consistent archive backup before enabling it on an existing pilot. To deploy
+with scheduled recovery disabled, pass
+`-e '{"weather_sd_recovery": false}'` to `bin/pi deploy`. The collector runs
+independently of the timer.
 
 To preview recovery on the Pi, run:
 

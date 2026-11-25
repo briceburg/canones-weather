@@ -46,7 +46,7 @@ while the gateway has power and receives sensor data. It cannot recover readings
 from before recording began or while power or reception was lost. Retain the
 permanent WeeWX archive and off-device backups independently.
 
-The optional [SD recovery timer](../deploy/raspberry-pi/README.md#recover-missing-pilot-observations)
+The [SD recovery timer](../deploy/raspberry-pi/README.md#recover-missing-pilot-observations)
 fills absent records within the latest 31 days of pilot history once live
 collection resumes. It uses samples whose local and epoch times agree on a
 five-minute logging minute. Off-grid, conflicting, or unavailable samples leave

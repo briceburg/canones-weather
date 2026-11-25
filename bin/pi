@@ -92,7 +92,6 @@ else:
     values = {'weather_gateway': os.environ['WEATHER_GATEWAY_URL']}
     if action == 'deploy':
         values['weather_elevation_m'] = os.environ['WEATHER_ELEVATION_M']
-        values['weather_sd_recovery'] = os.environ.get('WEATHER_SD_RECOVERY') == '1'
 Path(sys.argv[1]).write_text(json.dumps(values))
 PY
 printf -v ssh_args '%q ' "${ssh_options[@]}"
