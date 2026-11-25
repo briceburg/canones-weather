@@ -20,8 +20,8 @@ remain eligible for compression.
 
 `site/shared/assets/styles.css` defines the visual identity. `site-config.json`
 contains public domain/feed settings and the default data mode; the build adds
-shared station metadata. Source navigation
-works on the production and test domains and in a local preview.
+shared station metadata. Source navigation works on the production and test
+domains and in a local preview.
 
 The dashboard supports separate sample and live data modes. The production
 hostname selects the measured feed. Local previews start with samples; select
@@ -42,8 +42,8 @@ resize. A custom window retains its dates across unit/measurement changes and
 refreshes. Selecting a period or data mode resets it. The footer identifies the
 available record, which may extend beyond the displayed window.
 
-The heading's clock uses the visitor's device time, displayed in the configured station time zone.
-It is independent of observation timestamps.
+The heading's clock uses the visitor's device time, displayed in the configured
+station time zone. It is independent of observation timestamps.
 
 ## Station metadata
 

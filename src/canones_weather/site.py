@@ -1,6 +1,7 @@
 """Assemble static sites with the shared station metadata."""
 
 import json
+import re
 import shutil
 from html import escape
 
@@ -15,11 +16,7 @@ def render_html(source, station):
         "name_json": name_json,
         "timezone": escape(station["timezone"]),
     }
-    for key, value in values.items():
-        source = source.replace("{{ station." + key + " }}", value)
-    if "{{ station." in source:
-        raise ValueError("Unresolved station metadata in HTML")
-    return source
+    return re.sub(r"\{\{ station\.(\w+) \}\}", lambda match: values[match[1]], source)
 
 
 def build_site(repo_root, output_root):
