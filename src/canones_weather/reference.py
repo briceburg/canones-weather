@@ -37,6 +37,14 @@ STATIONS = {
         "longitude": -106.0958,
         "elevation_m": 1916.3,
     },
+    "gila-hot-springs": {
+        "name": "Gila Hot Springs · RCC-ACIS observations",
+        "station_id": "USC00293530",
+        "latitude": 33.1975,
+        "longitude": -108.2075,
+        "elevation_m": 1717.9,
+        "provider": "RCC-ACIS",
+    },
     "charleston": {
         "name": "Downtown Charleston · NOAA observations",
         "station_id": "USW00013782",
@@ -321,7 +329,7 @@ def fetch_reference(key, args):
             url="https://docs.rcc-acis.org/acisws/",
             download_url=url,
             citation="https://www.weather.gov/climateservices/nowdatafaq",
-            notes="Crozier cooperative station reporting dates. Recent reports may be preliminary.",
+            notes="Cooperative station reporting dates. Recent reports may be preliminary.",
         )
     elif provider == "USCRN":
         rows, urls = {}, []

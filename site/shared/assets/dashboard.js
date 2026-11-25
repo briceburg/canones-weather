@@ -39,6 +39,7 @@ const referenceSources = {
   abiquiu: {color: "#86b4cb", high: "#d9a4bd", low: "#76cbb6", line: "dotted"},
   albuquerque: {color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
   "santa-fe": {color: "#cbab8a", high: "#f6a285", low: "#8cd6c6", line: [12, 5]},
+  "gila-hot-springs": {color: "#9db47d", high: "#d5a95e", low: "#91bfb3", line: [2, 3, 8, 3]},
   charleston: {color: "#d6ae9a", high: "#f78979", low: "#9caee7", line: "dashed"},
   crozier: {color: "#d7c58f", high: "#e3a78f", low: "#7cbbdc", line: [10, 3, 2, 3]},
   bodega: {color: "#96beb4", high: "#efc990", low: "#71cbc5", line: [4, 3, 1, 3]},
