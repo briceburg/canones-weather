@@ -43,9 +43,9 @@ are missing. Sample presets end at the sample timestamp. Drag the timeline
 window to pan without changing its width. Earlier and Later step by an hour
 in hourly views and by a day in daily views. Drag the handles, select across the
 plot, or open Set date range to enter both ends in UTC. Widening a 24h window
-beyond 24 hours switches it to daily summaries and enables reference overlays
-for temperature and rain. A custom window retains its dates across measurement
-and unit changes and feed refreshes.
+beyond 24 hours switches it to daily summaries and enables compatible references.
+A custom window retains its dates across measurement changes, unit changes, and
+feed refreshes.
 Select a period or data mode to reset it.
 
 The heading's clock uses the visitor's device time, displayed in the configured
@@ -97,10 +97,10 @@ The sample generator uses only Python's standard library.
 
 The chart-source checkboxes select station observations and references under
 New Mexico, Coastal, and Places of Excellence in Sample or Live mode.
-The chart starts with station observations. Reference checkboxes are enabled for daily
-and seasonal temperature and precipitation views. Selections persist in other
-views. Hide station observations for a reference-only chart. Use the map pin
-beside a reference to open its station map. The
+The chart starts with station observations. Daily and seasonal views offer
+temperature, precipitation, wind, and humidity references where available.
+Selections persist in other views. Hide station observations for a reference-only
+chart. Use the map pin beside a reference to open its station map. The
 [reference guide](../docs/reference-data.md#station-locations) includes provider details.
 
 Reference sources are labeled separately and never fill station gaps. Sample
