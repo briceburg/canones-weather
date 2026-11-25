@@ -94,14 +94,13 @@ The sample generator uses only Python's standard library.
 
 ## Historical controls
 
-The chart-source checkboxes independently select station observations,
-Abiquiu Dam, Albuquerque airport, Santa Fe airport, Downtown Charleston,
-Crozier, Bodega Marine, and Port de Sóller
-in Sample or Live mode. The chart starts with station observations.
-References appear only for historical temperature and
-precipitation views; selections persist in unsupported views without changing
-the period or measurement. Hide station
-observations for a reference-only chart.
+The chart-source checkboxes select station observations and references under
+New Mexico and For fun in Sample or Live mode. The chart
+starts with station observations. Reference checkboxes are enabled for daily
+and seasonal temperature and precipitation views. Selections persist in other
+views. Hide station observations for a reference-only chart. Use the map pin
+beside a reference to open its station map. The
+[reference guide](../docs/reference-data.md#station-locations) includes provider details.
 
 Reference sources are labeled separately and never fill station gaps. Sample
 station series and their start marker remain illustrative; references retain

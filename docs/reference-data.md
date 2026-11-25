@@ -6,8 +6,9 @@ they never backfill its archive or establish past conditions at the property.
 Select references in the dashboard to compare daily temperature and precipitation
 in 30d, 1y, 3y, All, Seasons, or Monsoon. You can also widen the 24h timeline past
 24 hours to switch to daily summaries and show the selected references. The
-dashboard remembers your selections when you return to hourly history or switch
-measurements. Current conditions show the local station's observations.
+dashboard disables reference selection in hourly history and for measurements
+other than temperature and precipitation, and remembers your selections. Current
+conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
 commissioning date. Sample mode ends at its fixed fixture timestamp. Use Live
@@ -25,6 +26,7 @@ Station names link to the observing sites on OpenStreetMap.
 | [Downtown Charleston, SC][charleston-map] (USW00013782) | NOAA daily observations | 3 m |
 | [Crozier, VA][crozier-map] (USC00442142) | RCC-ACIS cooperative station observations. Recent reports may be preliminary. | 85.3 m |
 | [Bodega Marine Laboratory, CA][bodega-map] (USW00093245) | NOAA U.S. Climate Reference Network daily observations, coastal Sonoma County | 19.2 m |
+| [Milwaukee Mitchell Airport, WI][milwaukee-map] (USW00014839) | NOAA daily observations | 203.3 m |
 | [Port de Sóller, Mallorca][soller-map] (B051A) | AEMET OpenData daily observations from September 2020 in the exported record | 5 m |
 | [Secco Spring, NM][secco-map] | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
 
@@ -34,6 +36,7 @@ Station names link to the observing sites on OpenStreetMap.
 [charleston-map]: https://www.openstreetmap.org/?mlat=32.7750&mlon=-79.9239#map=14/32.7750/-79.9239
 [crozier-map]: https://www.openstreetmap.org/?mlat=37.6664&mlon=-77.8769#map=14/37.6664/-77.8769
 [bodega-map]: https://www.openstreetmap.org/?mlat=38.3208&mlon=-123.0747#map=14/38.3208/-123.0747
+[milwaukee-map]: https://www.openstreetmap.org/?mlat=42.9550&mlon=-87.9044#map=14/42.9550/-87.9044
 [soller-map]: https://www.openstreetmap.org/?mlat=39.7956&mlon=2.6914#map=14/39.7956/2.6914
 [secco-map]: https://www.openstreetmap.org/?mlat=36.150028&mlon=-106.445500#map=14/36.150028/-106.445500
 
@@ -132,8 +135,8 @@ Controls are generated outside Git and served from the configured R2 reference
 feed, independently of Pages builds. The local default output is ignored
 `tmp/reference/`. Pass `--source` to refresh a single reference. The available keys
 are `abiquiu`, `albuquerque`, `santa-fe`, `charleston`, `crozier`, `bodega`,
-and `soller`. The default `all` processes every source independently so a failure
-in one source leaves the others able to refresh. Each validated file
+`milwaukee`, and `soller`. The default `all` processes every source independently
+so a failure in one source leaves the others able to refresh. Each validated file
 replaces its own R2 object only on successful upload; the last published data
 survives a failed refresh. Missing or invalid downloads are not published.
 
@@ -143,8 +146,8 @@ availability; `retrieved_at` describes the download time. The dashboard shows
 the latest date for the selected measurement and revalidates selected controls
 periodically in both modes.
 
-[The reference workflow](../.github/workflows/reference-data.yml) checks all seven
-references daily, when reference code or workflow changes reach `main`, and on
+[The reference workflow](../.github/workflows/reference-data.yml) checks every
+reference daily, when reference code or workflow changes reach `main`, and on
 manual dispatch. Its independent matrix jobs do
 not run on the Pi or modify the weather archive. Configure repository secrets
 `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` with the existing bucket-scoped
@@ -166,6 +169,7 @@ artificial commits as a keepalive. A fresh download cannot remove provider lag.
 - [NOAA Albuquerque airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023050.dly)
   and [Santa Fe airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023049.dly).
 - [NOAA Downtown Charleston record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00013782.dly),
+  [NOAA Milwaukee Mitchell Airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00014839.dly),
   [RCC-ACIS Crozier data access](https://docs.rcc-acis.org/acisws/),
   and [NOAA USCRN daily data and format](https://www.ncei.noaa.gov/pub/data/uscrn/products/daily01/).
 - [AEMET Port de Sóller station](https://www.aemet.es/en/eltiempo/observacion/ultimosdatos?l=B051A)

@@ -60,6 +60,13 @@ STATIONS = {
         "elevation_m": 19.2,
         "provider": "USCRN",
     },
+    "milwaukee": {
+        "name": "Milwaukee Mitchell Airport · NOAA observations",
+        "station_id": "USW00014839",
+        "latitude": 42.9550,
+        "longitude": -87.9044,
+        "elevation_m": 203.3,
+    },
     "soller": {
         "name": "Port de Sóller · AEMET observations",
         "station_id": "B051A",
