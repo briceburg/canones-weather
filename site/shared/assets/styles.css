@@ -526,6 +526,28 @@ p {
   width: 100%;
   margin-top: 12px;
 }
+.timeline-navigation {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.timeline-navigation button {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: inherit;
+  white-space: nowrap;
+}
+.timeline-navigation button:disabled {
+  opacity: 0.5;
+}
 .history-foot {
   display: flex;
   justify-content: space-between;

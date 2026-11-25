@@ -91,8 +91,7 @@ extremes or turn missing rainfall into a dry period.
 
 The exporter supplies the last 24 hours at five-minute resolution in `recent`,
 30 days of hourly summaries, and daily summaries for the full archive. The browser
-uses recent rows for 24h, daily rows for 30d/1y/3y/All.
-Older feeds without `recent` use hourly rows for 24h. All means
+uses hourly rows for 24h and daily rows for 30d/1y/3y/All. All means
 all daily history supplied by the feed. Chart windows do not set archive
 retention: retain the full five-minute archive and consistent off-device backups
 independently of these exports.
