@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from canones_weather.jsonio import write_json
 
 ZONE = ZoneInfo("America/Denver")
+BODEGA_LST = timezone(timedelta(hours=-8))
 STATIONS = {
     "abiquiu": {
         "name": "Abiquiu Dam · NOAA + RCC-ACIS observations",
@@ -320,7 +321,8 @@ def fetch_reference(key, args):
     start = date(args.start_year, 1, 1)
     station = STATIONS[key]
     provider = station.get("provider")
-    today = datetime.now(ZoneInfo("Europe/Madrid")).date() if provider == "AEMET" else date.today()
+    reporting_zone = {"AEMET": ZoneInfo("Europe/Madrid"), "USCRN": BODEGA_LST}.get(provider)
+    today = datetime.now(reporting_zone).date()
     end = date(args.end_year, 12, 31) if args.end_year else today - timedelta(days=1)
     source = {"id": key, "type": "observed", **station}
     if provider == "RCC-ACIS":
@@ -335,8 +337,14 @@ def fetch_reference(key, args):
         rows, urls = {}, []
         for year in range(max(start.year, 2008), end.year + 1):
             url = f"{USCRN_URL}{year}/CRND0103-{year}-CA_Bodega_6_WSW.txt"
+            try:
+                text = download(url)
+            except HTTPError as error:
+                if error.code != 404 or year != today.year or end != date(year, 1, 1):
+                    raise
+                break  # NOAA can post the first annual file after the first reporting day.
             urls.append(url)
-            annual = uscrn_rows(download(url), station["station_id"], year, complete_year=date(year, 12, 31) <= end)
+            annual = uscrn_rows(text, station["station_id"], year, complete_year=date(year, 12, 31) <= end)
             rows.update((day, values) for day, values in annual.items() if start <= day <= end)
         source.update(
             url="https://www.ncei.noaa.gov/products/land-based-station/us-climate-reference-network",
