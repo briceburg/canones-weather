@@ -380,9 +380,6 @@ function renderChart() {
     const key = input.dataset.control;
     input.disabled = canCompare && !input.dataset.metrics.split(" ").includes(state.metric);
     input.checked = !input.disabled && state.controls.has(key);
-    const hint = input.parentElement.querySelector("[data-unavailable]");
-    hint.hidden = !input.disabled;
-    if (input.disabled) hint.textContent = ` · No ${state.metric} data`;
     if (canCompare && input.checked) activeControls.push(key);
   }
   const showReferences = activeControls.length > 0;

@@ -287,10 +287,11 @@
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
             <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
-            <fieldset class="reference-sources" id="reference-sources" aria-describedby="control-note" disabled>
+            <fieldset class="reference-sources" id="reference-sources" aria-describedby="reference-eligibility control-note" disabled>
               <legend>Reference history</legend>
-              <p id="control-note" class="small" aria-live="polite">Widen past 24h or choose 30d to compare daily references.</p>
+              <p id="reference-eligibility" class="small">Dimmed sources are unavailable for the selected metric or time scale.</p>
               {{ reference_groups }}
+              <p id="control-note" class="small" aria-live="polite">Widen past 24h or choose 30d to compare daily references.</p>
             </fieldset>
             <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md#station-locations">Sources, coverage &amp; methods ↗</a>
           </fieldset>

@@ -41,7 +41,7 @@ def reference_groups():
             groups.append(
                 f'<span class="reference-option"><label><input type="checkbox" data-control="{key}" '
                 f'data-name="{name}" data-metrics="{metrics}" /> '
-                f'<span>{name}{hint}<small class="muted" data-unavailable hidden></small></span></label><a href="{url}" '
+                f'<span>{name}{hint}</span></label><a href="{url}" '
                 f'aria-label="Map of {name} (opens in a new tab)" target="_blank" rel="noopener">📍</a></span>'
             )
         groups.append("</fieldset>")

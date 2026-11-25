@@ -5,7 +5,7 @@ monsoon rain against Secco Spring's. Sources need not share the station's climat
 they never backfill its archive or establish past conditions at the property.
 Select references in the dashboard to compare daily measurements in 30d, 1y, 3y,
 All, Seasons, or Monsoon. You can also widen the 24h timeline past 24 hours to
-show daily summaries. The dashboard marks references that lack the selected
+show daily summaries. The dashboard dims references that lack the selected
 measurement, disables selection in hourly history, and remembers your selections.
 Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
