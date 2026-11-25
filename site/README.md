@@ -70,11 +70,11 @@ and sample screenshots are maintained separately from the website build.
 
 ## Third-party software
 
-`shared/assets/vendor/echarts/` contains the unmodified Apache ECharts 6.0.0
-browser distribution from https://github.com/apache/echarts/tree/6.0.0/dist,
-with its upstream LICENSE and NOTICE. It is Apache-2.0 licensed and served locally;
-there is no runtime CDN dependency. Original site code is covered by this repo's
-MIT license. Update the pinned distribution and notices together.
+`shared/assets/vendor/echarts/` contains the unmodified Apache ECharts 6.1.0
+common browser bundle with its upstream LICENSE and NOTICE. It is Apache-2.0
+licensed and served locally. Original site code is covered by this repo's MIT
+license. Update the pinned distribution and notices together.
+[Apache ECharts 6.1.0 distribution](https://github.com/apache/echarts/tree/6.1.0/dist)
 
 ## Branding
 
