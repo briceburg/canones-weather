@@ -874,7 +874,7 @@ p {
 
 .reference-group { min-width: 0; border: 0; margin: 0 0 6px; padding: 0; }
 .reference-group legend { padding: 0; }
-.reference-sources:disabled label { color: var(--muted); }
+.reference-sources label:has(> input:disabled) { color: var(--muted); }
 .reference-option { display: inline-flex; align-items: center; margin-right: 10px; }
 .reference-option label { margin-right: 0; }
 .reference-option a { display: inline-grid; place-items: center; min-width: 24px; min-height: 24px; font-size: .8rem; text-decoration: none; }

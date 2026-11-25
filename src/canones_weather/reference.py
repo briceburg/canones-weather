@@ -27,6 +27,7 @@ STATIONS = {
     "albuquerque": {
         "name": "Albuquerque airport · NOAA observations",
         "station_id": "USW00023050",
+        "additional_metrics": ("wind",),
         "latitude": 35.0419,
         "longitude": -106.6156,
         "elevation_m": 1618.5,
@@ -34,6 +35,7 @@ STATIONS = {
     "santa-fe": {
         "name": "Santa Fe airport · NOAA observations",
         "station_id": "USW00023049",
+        "additional_metrics": ("wind",),
         "latitude": 35.6108,
         "longitude": -106.0958,
         "elevation_m": 1916.3,
@@ -49,6 +51,7 @@ STATIONS = {
     "charleston": {
         "name": "Downtown Charleston · NOAA observations",
         "station_id": "USW00013782",
+        "additional_metrics": ("wind",),
         "latitude": 32.7750,
         "longitude": -79.9239,
         "elevation_m": 3.0,
@@ -68,10 +71,12 @@ STATIONS = {
         "longitude": -123.0747,
         "elevation_m": 19.2,
         "provider": "USCRN",
+        "additional_metrics": ("humidity",),
     },
     "milwaukee": {
         "name": "Milwaukee Mitchell Airport · NOAA observations",
         "station_id": "USW00014839",
+        "additional_metrics": ("wind",),
         "latitude": 42.9550,
         "longitude": -87.9044,
         "elevation_m": 203.3,
@@ -83,6 +88,7 @@ STATIONS = {
         "longitude": 2.6914,
         "elevation_m": 5.0,
         "provider": "AEMET",
+        "additional_metrics": ("wind", "humidity"),
     },
 }
 ACIS_URL = "https://data.rcc-acis.org/StnData"
@@ -90,6 +96,7 @@ USCRN_URL = "https://www.ncei.noaa.gov/pub/data/uscrn/products/daily01/"
 AEMET_DAILY_URL = "https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos"
 AEMET_ARCHIVE_START = date(2020, 9, 1)
 FIELDS = {"TMIN": "temperature_min_c", "TMAX": "temperature_max_c", "PRCP": "rain_mm"}
+ADDITIONAL_FIELDS = ("wind_speed_m_s", "humidity_pct")
 
 
 def download(url, *, api_key=None):
@@ -100,13 +107,14 @@ def download(url, *, api_key=None):
         return response.read().decode(response.headers.get_content_charset() or "utf-8-sig")
 
 
-def noaa_rows(text, start, end, station_id="USC00290041"):
+def noaa_rows(text, start, end, station_id="USC00290041", *, include_wind=False):
+    fields = FIELDS | {"AWND": "wind_speed_m_s"} if include_wind else FIELDS
     rows = {}
     for line in text.splitlines():
         if line[:11] != station_id:
             raise ValueError("Unexpected NOAA station")
         year, month, element = int(line[11:15]), int(line[15:17]), line[17:21]
-        if element not in FIELDS or not start.year <= year <= end.year:
+        if element not in fields or not start.year <= year <= end.year:
             continue
         for i in range(31):
             value = int(line[21 + 8 * i : 26 + 8 * i])
@@ -119,7 +127,7 @@ def noaa_rows(text, start, end, station_id="USC00290041"):
                 continue
             if start <= day <= end:
                 row = rows.setdefault(day, {})
-                row[FIELDS[element]] = value / 10
+                row[fields[element]] = value / 10
                 if element == "PRCP" and measurement == "T":
                     row["precipitation_trace"] = True
     return rows
@@ -183,20 +191,24 @@ def uscrn_rows(text, station_id, year, *, complete_year=False):
     previous = date(year, 1, 1) - timedelta(days=1)
     for line in text.splitlines():
         columns = line.split()
-        if len(columns) < 10 or columns[0] != station_id[-5:]:
+        if len(columns) < 18 or columns[0] != station_id[-5:]:
             raise ValueError("Invalid USCRN station record")
         day = date.fromisoformat(columns[1])
         if day <= previous or day.year != year:
             raise ValueError("Invalid USCRN reporting calendar")
         previous = day
-        # The daily01 product reports Celsius and millimetres. Invalid inputs become missing values.
         values = {}
-        for element, index in (("TMIN", 6), ("TMAX", 5), ("PRCP", 9)):
+        for field, index in (
+            ("temperature_min_c", 6),
+            ("temperature_max_c", 5),
+            ("rain_mm", 9),
+            ("humidity_pct", 17),
+        ):
             value = float(columns[index])
             if not math.isfinite(value):
                 raise ValueError("Invalid USCRN observation")
             if value != -9999:
-                values[FIELDS[element]] = value
+                values[field] = value
         if values:
             rows[day] = values
     if complete_year and previous != date(year, 12, 31):
@@ -215,19 +227,25 @@ def aemet_rows(records, station_id, start, end):
             raise ValueError("Invalid AEMET reporting calendar")
         previous = day
         values = {}
-        for element, key in (("TMIN", "tmin"), ("TMAX", "tmax"), ("PRCP", "prec")):
-            raw = record.get(key)
+        for field, key in (
+            ("temperature_min_c", "tmin"),
+            ("temperature_max_c", "tmax"),
+            ("rain_mm", "prec"),
+            ("wind_speed_m_s", "velmedia"),
+            ("humidity_pct", "hrMedia"),
+        ):
+            raw = record.get(key, record.get(key.lower()))
             if raw is None or raw == "":
                 continue
-            if element == "PRCP" and raw == "Acum":
+            if field == "rain_mm" and raw == "Acum":
                 continue  # A multiday accumulation has no reliable one-day total.
-            if element == "PRCP" and raw == "Ip":
+            if field == "rain_mm" and raw == "Ip":
                 values.update(rain_mm=0.0, precipitation_trace=True)
                 continue
             value = float(str(raw).replace(",", "."))
             if not math.isfinite(value):
                 raise ValueError("Invalid AEMET observation")
-            values[FIELDS[element]] = value
+            values[field] = value
         if values:
             rows[day] = values
     return rows
@@ -279,11 +297,21 @@ def document(source, rows, start, end):
             }
         )
         day += timedelta(days=1)
-    if not any(row[field] is not None for row in daily for field in FIELDS.values()):
+
+    def has_observation(row):
+        return any(row.get(field) is not None for field in (*FIELDS.values(), *ADDITIONAL_FIELDS))
+
+    if not any(map(has_observation, daily)):
         raise ValueError("Reference download contains no observations")
     for row in daily:
         low, high = row["temperature_min_c"], row["temperature_max_c"]
-        if (low is not None and high is not None and low > high) or (row["rain_mm"] is not None and row["rain_mm"] < 0):
+        humidity = row.get("humidity_pct")
+        nonnegative = (row.get(field) for field in ("rain_mm", "wind_speed_m_s"))
+        if (
+            (low is not None and high is not None and low > high)
+            or (humidity is not None and not 0 <= humidity <= 100)
+            or any(value is not None and value < 0 for value in nonnegative)
+        ):
             raise ValueError("Invalid reference observation range")
     return {
         "schema_version": 1,
@@ -292,9 +320,7 @@ def document(source, rows, start, end):
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
-        "available_through": max(
-            day for day, values in rows.items() if any(values.get(field) is not None for field in FIELDS.values())
-        ).isoformat(),
+        "available_through": max(day for day, values in rows.items() if has_observation(values)).isoformat(),
         "daily": daily,
     }
 
@@ -302,7 +328,9 @@ def document(source, rows, start, end):
 def ghcn_reference(key, station, start, end):
     url = f"https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station['station_id']}.dly"
     text = download(url)
-    rows = noaa_rows(text, start, end, station["station_id"])
+    rows = noaa_rows(
+        text, start, end, station["station_id"], include_wind="wind" in station.get("additional_metrics", ())
+    )
     source = {
         "id": key,
         "type": "observed",
