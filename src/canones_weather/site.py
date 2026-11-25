@@ -13,13 +13,16 @@ REFERENCE_GROUPS = {
         ("abiquiu", "Abiquiu Dam", ""),
         ("santa-fe", "Santa Fe airport", ""),
         ("albuquerque", "Albuquerque airport", ""),
+        ("gila-hot-springs", "Gila Hot Springs", ""),
     ),
-    "For fun": (
-        ("charleston", "Downtown Charleston", ", SC"),
-        ("crozier", "Crozier", ", VA"),
+    "Coastal weather": (
         ("bodega", "Bodega Marine", ", CA"),
-        ("milwaukee", "Milwaukee airport", ", WI"),
         ("soller", "Port de Sóller", ", Mallorca · © AEMET"),
+        ("charleston", "Downtown Charleston", ", SC"),
+    ),
+    "More U.S. stations": (
+        ("crozier", "Crozier", ", VA"),
+        ("milwaukee", "Milwaukee airport", ", WI"),
     ),
 }
 

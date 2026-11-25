@@ -23,6 +23,7 @@ Station names link to the observing sites on OpenStreetMap.
 | [Abiquiu Dam, NM][abiquiu-map] (USC00290041) | NOAA daily observations with same-station RCC-ACIS reports, about 10.2 km / 6.3 mi away | 1,944.6 m |
 | [Albuquerque airport, NM][albuquerque-map] (USW00023050) | NOAA daily observations | 1,618.5 m |
 | [Santa Fe airport, NM][santa-fe-map] (USW00023049) | NOAA daily observations, about 68 km / 42 mi away | 1,916.3 m |
+| [Gila Hot Springs, NM][gila-hot-springs-map] (USC00293530) | RCC-ACIS cooperative station observations about 48 km / 30 mi north of Silver City. Recent reports may be preliminary. | 1,717.9 m |
 | [Downtown Charleston, SC][charleston-map] (USW00013782) | NOAA daily observations | 3 m |
 | [Crozier, VA][crozier-map] (USC00442142) | RCC-ACIS cooperative station observations. Recent reports may be preliminary. | 85.3 m |
 | [Bodega Marine Laboratory, CA][bodega-map] (USW00093245) | NOAA U.S. Climate Reference Network daily observations, coastal Sonoma County | 19.2 m |
@@ -33,6 +34,7 @@ Station names link to the observing sites on OpenStreetMap.
 [abiquiu-map]: https://www.openstreetmap.org/?mlat=36.2403&mlon=-106.4278#map=14/36.2403/-106.4278
 [albuquerque-map]: https://www.openstreetmap.org/?mlat=35.0419&mlon=-106.6156#map=14/35.0419/-106.6156
 [santa-fe-map]: https://www.openstreetmap.org/?mlat=35.6108&mlon=-106.0958#map=14/35.6108/-106.0958
+[gila-hot-springs-map]: https://www.openstreetmap.org/?mlat=33.1975&mlon=-108.2075#map=14/33.1975/-108.2075
 [charleston-map]: https://www.openstreetmap.org/?mlat=32.7750&mlon=-79.9239#map=14/32.7750/-79.9239
 [crozier-map]: https://www.openstreetmap.org/?mlat=37.6664&mlon=-77.8769#map=14/37.6664/-77.8769
 [bodega-map]: https://www.openstreetmap.org/?mlat=38.3208&mlon=-123.0747#map=14/38.3208/-123.0747
@@ -40,8 +42,9 @@ Station names link to the observing sites on OpenStreetMap.
 [soller-map]: https://www.openstreetmap.org/?mlat=39.7956&mlon=2.6914#map=14/39.7956/2.6914
 [secco-map]: https://www.openstreetmap.org/?mlat=36.150028&mlon=-106.445500#map=14/36.150028/-106.445500
 
-Abiquiu Dam is about 207 m below Secco Spring. Differences in terrain, elevation,
-exposure, and storms are part of these regional comparisons.
+Abiquiu Dam is about 207 m below Secco Spring. Gila Hot Springs is about 434 m
+below Secco Spring and provides a southwestern New Mexico monsoon comparison.
+Differences in terrain, elevation, exposure, and storms are part of these comparisons.
 
 Use Albuquerque and Santa Fe airports for recent regional daily temperature and
 precipitation comparisons. Their GHCN-Daily records can lag while NOAA processes
@@ -57,8 +60,8 @@ and solar controls are unavailable. Reference precipitation includes snow water
 equivalent, which is different from the WS90's rainfall measurement.
 
 Daily timestamps label the provider's reporting date in America/Denver. Crozier
-retains its cooperative observer reporting dates. Bodega retains the USCRN local
-standard time calendar. Port de Sóller retains AEMET reporting dates and its
+and Gila Hot Springs retain their cooperative observer reporting dates. Bodega
+retains the USCRN local standard time calendar. Port de Sóller retains AEMET reporting dates and its
 07:00–07:00 precipitation reporting period. NOAA missing values,
 quality-flagged values, and presumed-zero measurements are excluded. Trace
 precipitation remains a flagged zero and is identified in daily tooltips.
@@ -110,10 +113,10 @@ See [ACIS documentation](https://docs.rcc-acis.org/acisws/) and
 
 For June 15–September 30, all 108 dates are available in each listed source (mm):
 
-| Monsoon | Abiquiu Dam | Albuquerque airport |
-| --- | --- | --- |
-| 2024 | 143.20 | 97.80 |
-| 2025 | 107.30 | 78.40 |
+| Monsoon | Abiquiu Dam | Albuquerque airport | Gila Hot Springs |
+| --- | --- | --- | --- |
+| 2024 | 143.20 | 97.80 | 229.87 |
+| 2025 | 107.30 | 78.40 | 155.19 |
 
 ## Refreshing controls
 
@@ -134,9 +137,9 @@ uv run --env-file .env python -m canones_weather.reference --start-year 2016 --o
 Controls are generated outside Git and served from the configured R2 reference
 feed, independently of Pages builds. The local default output is ignored
 `tmp/reference/`. Pass `--source` to refresh a single reference. The available keys
-are `abiquiu`, `albuquerque`, `santa-fe`, `charleston`, `crozier`, `bodega`,
-`milwaukee`, and `soller`. The default `all` processes every source independently
-so a failure in one source leaves the others able to refresh. Each validated file
+are `abiquiu`, `albuquerque`, `santa-fe`, `gila-hot-springs`, `charleston`,
+`crozier`, `bodega`, `milwaukee`, and `soller`. The default `all` processes every
+source independently so a failure in one source leaves the others able to refresh. Each validated file
 replaces its own R2 object only on successful upload; the last published data
 survives a failed refresh. Missing or invalid downloads are not published.
 
@@ -168,6 +171,8 @@ artificial commits as a keepalive. A fresh download cannot remove provider lag.
   and [GHCN-Daily citation](https://doi.org/10.7289/V5D21VHZ).
 - [NOAA Albuquerque airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023050.dly)
   and [Santa Fe airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023049.dly).
+- [NOAA Gila Hot Springs station record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USC00293530.dly)
+  and [RCC-ACIS data access](https://docs.rcc-acis.org/acisws/).
 - [NOAA Downtown Charleston record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00013782.dly),
   [NOAA Milwaukee Mitchell Airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00014839.dly),
   [RCC-ACIS Crozier data access](https://docs.rcc-acis.org/acisws/),

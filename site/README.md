@@ -95,8 +95,8 @@ The sample generator uses only Python's standard library.
 ## Historical controls
 
 The chart-source checkboxes select station observations and references under
-New Mexico and For fun in Sample or Live mode. The chart
-starts with station observations. Reference checkboxes are enabled for daily
+New Mexico, Coastal weather, and More U.S. stations in Sample or Live mode.
+The chart starts with station observations. Reference checkboxes are enabled for daily
 and seasonal temperature and precipitation views. Selections persist in other
 views. Hide station observations for a reference-only chart. Use the map pin
 beside a reference to open its station map. The
