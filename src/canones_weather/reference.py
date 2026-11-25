@@ -1,11 +1,8 @@
 """Build attributed daily comparison data without changing the station archive."""
 
 import argparse
-import csv
-import io
 import json
 import math
-import re
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -31,16 +28,15 @@ NOAA_STATIONS = {
         "longitude": -106.6156,
         "elevation_m": 1618.5,
     },
-    "madrid": {
-        "name": "Madrid 1.9 SE · NOAA/CoCoRaHS precipitation",
-        "station_id": "US1NMSF0189",
-        "latitude": 35.3845,
-        "longitude": -106.1301,
-        "elevation_m": 1923.6,
+    "santa-fe": {
+        "name": "Santa Fe airport · NOAA observations",
+        "station_id": "USW00023049",
+        "latitude": 35.6108,
+        "longitude": -106.0958,
+        "elevation_m": 1916.3,
     },
 }
 ACIS_URL = "https://data.rcc-acis.org/StnData"
-DAYMET_URL = "https://daymet.ornl.gov/single-pixel/api/data"
 FIELDS = {"TMIN": "temperature_min_c", "TMAX": "temperature_max_c", "PRCP": "rain_mm"}
 
 
@@ -120,29 +116,6 @@ def supplement_abiquiu(text, rows, start, end):
     }
 
 
-def daymet_rows(text, start, end):
-    elevation = float(
-        next(line.split(":", 1)[1].split()[0] for line in text.splitlines() if line.startswith("Elevation:"))
-    )
-    rows = {}
-    table = text[text.index("year,yday,") :]
-    for row in csv.DictReader(io.StringIO(table)):
-        day = date(int(row["year"]), 1, 1) + timedelta(days=int(row["yday"]) - 1)
-        if not start <= day <= end:
-            continue
-        values = {}
-        for field, column in (
-            ("temperature_min_c", "tmin (deg c)"),
-            ("temperature_max_c", "tmax (deg c)"),
-            ("rain_mm", "prcp (mm/day)"),
-        ):
-            value = float(row[column])
-            if value != -9999:
-                values[field] = value
-        rows[day] = values
-    return rows, elevation
-
-
 def document(source, rows, start, end):
     daily = []
     day = start
@@ -180,89 +153,40 @@ def document(source, rows, start, end):
 def fetch_reference(key, args):
     start = date(args.start_year, 1, 1)
     end = date(args.end_year, 12, 31) if args.end_year else date.today() - timedelta(days=1)
-    if key == "daymet":
-        url = (
-            DAYMET_URL
-            + "?"
-            + urlencode(
-                {
-                    "lat": args.latitude,
-                    "lon": args.longitude,
-                    "vars": "tmax,tmin,prcp",
-                    **(
-                        {"years": ",".join(str(y) for y in range(args.start_year, args.end_year + 1))}
-                        if args.end_year
-                        else {}
-                    ),
-                    "format": "csv",
-                }
-            )
-        )
-        text = download(url)
-        citation = re.search(r"https://doi\.org/[^\s;]+", text)
-        if citation is None:
-            raise ValueError("Daymet response is missing its dataset citation")
-        rows, elevation = daymet_rows(text, start, end)
-        latest_year = max(rows).year
-        if args.end_year and latest_year < args.end_year:
-            raise ValueError("Requested Daymet year is not available")
-        end = date(latest_year, 12, 31)
-        source = {
-            "id": "daymet",
-            "name": "Daymet · Cañones grid estimate",
-            "type": "modeled",
-            "url": "https://daymet.ornl.gov/",
-            "download_url": url,
-            "citation": citation.group(),
-            "latitude": args.latitude,
-            "longitude": args.longitude,
-            "elevation_m": elevation,
-            "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from the local station. Leap-year December 31 is absent; gaps are preserved.",
-        }
-    else:
-        station = NOAA_STATIONS[key]
-        url = f"https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station['station_id']}.dly"
-        text = download(url)
-        rows = noaa_rows(text, start, end, station["station_id"])
-        source = {
-            "id": key,
-            "type": "observed",
-            **station,
-            "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
-            "download_url": url,
-            "citation": "https://doi.org/10.7289/V5D21VHZ",
-            "notes": "Regional comparison, not local station measurements. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero.",
-        }
-        if key == "abiquiu":
-            source["supplement"] = supplement_abiquiu(text, rows, start, end)
-        start, end = max(start, min(rows)), max(rows)
+    station = NOAA_STATIONS[key]
+    url = f"https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station['station_id']}.dly"
+    text = download(url)
+    rows = noaa_rows(text, start, end, station["station_id"])
+    source = {
+        "id": key,
+        "type": "observed",
+        **station,
+        "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
+        "download_url": url,
+        "citation": "https://doi.org/10.7289/V5D21VHZ",
+        "notes": "Regional comparison, not local station measurements. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero.",
+    }
+    if key == "abiquiu":
+        source["supplement"] = supplement_abiquiu(text, rows, start, end)
+    start, end = max(start, min(rows)), max(rows)
     return document(source, rows, start, end)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", choices=["daymet", *NOAA_STATIONS, "all"], default="all")
-    parser.add_argument("--latitude", type=float, help="Station latitude for Daymet")
-    parser.add_argument("--longitude", type=float, help="Station longitude for Daymet")
+    parser.add_argument("--source", choices=[*NOAA_STATIONS, "all"], default="all")
     parser.add_argument("--start-year", type=int, default=2016)
     parser.add_argument("--end-year", type=int, help="Limit to this completed year; otherwise use available data")
     parser.add_argument("--output", type=Path, default=Path("tmp/reference"))
     parser.add_argument("--publish-config", type=Path, help="Publish validated references to this R2 destination")
     args = parser.parse_args()
-    needs_daymet = args.source in ["daymet", "all"]
-    if needs_daymet and (args.latitude is None or args.longitude is None):
-        parser.error("Daymet requires --latitude and --longitude")
-    if (args.latitude is not None and not -90 <= args.latitude <= 90) or (
-        args.longitude is not None and not -180 <= args.longitude <= 180
-    ):
-        parser.error("Invalid coordinates")
-    if not (1980 if needs_daymet else 1) <= args.start_year <= (args.end_year or date.today().year) or (
+    if not 1 <= args.start_year <= (args.end_year or date.today().year) or (
         args.end_year and args.end_year >= date.today().year
     ):
         parser.error("Invalid year range; an explicit end year must be completed")
     config = json.loads(args.publish_config.read_text()) if args.publish_config else None
     failed = False
-    for key in ["daymet", *NOAA_STATIONS] if args.source == "all" else [args.source]:
+    for key in NOAA_STATIONS if args.source == "all" else [args.source]:
         try:
             data = fetch_reference(key, args)
             body = write_json(args.output / f"{key}.json", data)
