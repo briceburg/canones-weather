@@ -20,7 +20,7 @@ REFERENCE_GROUPS = {
         ("soller", "Port de Sóller", ", Mallorca · © AEMET"),
         ("charleston", "Downtown Charleston", ", SC"),
     ),
-    "Places of interest": (
+    "Places of Excellence": (
         ("crozier", "Crozier", ", VA"),
         ("milwaukee", "Milwaukee airport", ", WI"),
     ),

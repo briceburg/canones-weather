@@ -54,9 +54,9 @@ gaps within its record and at the most recent dates.
 ## Variables and boundaries
 
 References contain daily minimum/maximum temperature in degrees Celsius and daily
-precipitation in millimetres. No reference supplies
-the daily mean used by the local chart; no mean is invented from highs and lows. Wind, humidity,
-and solar controls are unavailable. Reference precipitation includes snow water
+precipitation in millimetres. The reference feeds supply highs and lows for
+temperature comparisons. Wind, humidity, and solar controls are unavailable.
+Reference precipitation includes snow water
 equivalent, which is different from the WS90's rainfall measurement.
 
 Daily timestamps label the provider's reporting date in America/Denver. Crozier
