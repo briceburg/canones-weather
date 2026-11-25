@@ -34,7 +34,9 @@ see the [Pi guide](../deploy/raspberry-pi/README.md).
 
 Select temperature, humidity, wind, rain, or solar irradiance. The 24h view uses
 hourly summaries. The 30d, 1y, 3y, and All views use daily summaries,
-including temperature mean/low/high. Seasons and Monsoon aggregate daily records.
+including temperature lows and highs. Seasons and Monsoon aggregate daily records.
+The data feed also includes a measured temperature mean. The station-only chart
+uses it when an older feed supplies no lows or highs.
 Display units do not change stored data; see [the data contract](../docs/data.md).
 
 Live presets end at the visitor's current time and show gaps if observations

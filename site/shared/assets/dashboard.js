@@ -415,7 +415,7 @@ function renderChart() {
   const referenceHasData = comparisons.some((item) => item.rows.some((row) => referenceFields.some((key) => numeric(row[key]))));
   function describeCoverage(view) {
     const inWindow = (row) => !view || (Date.parse(row.at) >= view.from && Date.parse(row.at) <= view.to);
-    const stationInWindow = rows.some((row) => numeric(row[field]) && inWindow(row));
+    const stationInWindow = rows.some((row) => hasStationValue(row) && inWindow(row));
     const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
       inWindow(row) && referenceFields.some((key) => numeric(row[key]))));
     if (showReferences)
@@ -425,8 +425,17 @@ function renderChart() {
     $("control-note").textContent = controlNote + (comparisons.length && !referenceInWindow
       ? " No selected control values overlap this window." : "");
   }
-  $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
-  if (!stationHasData && !referenceHasData) {
+  const stationExtrema = state.metric === "temperature" ? [
+    ["low", "temperature_min_c", "#7fc9e4"],
+    ["high", "temperature_max_c", "#edb46f"],
+  ].filter(([, key]) => rows.some((row) => numeric(row[key]))) : [];
+  const stationMean = state.metric === "temperature" && !stationExtrema.length && !referenceHasData;
+  const showPrimary = stationHasData && (state.metric !== "temperature" || stationMean);
+  const hasStationValue = (row) => (showPrimary && numeric(row[field])) ||
+    stationExtrema.some(([, key]) => numeric(row[key]));
+  const stationPlotted = showPrimary || stationExtrema.length > 0;
+  $("timeline-controls").hidden = seasonal || (!stationPlotted && !referenceHasData);
+  if (!stationPlotted && !referenceHasData) {
     describeCoverage();
     const emptyMessage = !state.showStation && !state.controls.size
       ? "Choose observations or\nreference history to display."
@@ -473,20 +482,14 @@ function renderChart() {
     };
   };
   // Temperature hue encodes high/low; line pattern identifies the source.
-  const series = stationHasData ? [
-    makeSeries(comparisons.length ? `${stationName} · ${state.metric === "temperature" ? "mean" : label.toLowerCase()}` : state.metric === "temperature" ? "Mean temperature" : label, field, comparisons.length ? "#e4b17b" : color),
+  const series = showPrimary ? [
+    makeSeries(referenceHasData ? `${stationName} · ${label.toLowerCase()}` : stationMean ? "Mean temperature" : label, field, color),
   ] : [];
-  if (state.metric === "temperature" &&
-      rows.some((row) => numeric(row.temperature_min_c) || numeric(row.temperature_max_c))) {
-    for (const [suffix, key, seriesColor] of [
-      ["low", "temperature_min_c", "#7fc9e4"],
-      ["high", "temperature_max_c", "#edb46f"],
-    ]) {
-      const prefix = comparisons.length ? `${stationName} · ` : "";
-      series.push(makeSeries(`${prefix}${resolution} ${suffix}`, key, seriesColor, {
-        lineStyle: {width: 1.5, type: "solid", color: seriesColor},
-      }));
-    }
+  for (const [suffix, key, seriesColor] of stationExtrema) {
+    const name = referenceHasData ? `${stationName} · ${suffix}` : `${resolution} ${suffix}`;
+    series.push(makeSeries(name, key, seriesColor, {
+      lineStyle: {width: 1.5, type: "solid", color: seriesColor},
+    }));
   }
   if (state.metric === "wind" && stationHasData)
     series.push(
@@ -506,7 +509,7 @@ function renderChart() {
       }, item.rows));
     }
   }
-  if (comparisons.length && stationHasData && !seasonal && timestamp(history?.record_started_at)) {
+  if (comparisons.length && stationPlotted && !seasonal && timestamp(history?.record_started_at)) {
     series[0].markLine = {
       symbol: "none", lineStyle: {color: "#e4b17b", type: "dashed"},
       data: [{xAxis: Date.parse(history.record_started_at), name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
@@ -643,11 +646,11 @@ function renderChart() {
     : "No recorded values in this period.";
   $("chart-description").textContent = seasonal
     ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
-    : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" ? `${stationHasData ? "mean temperature, with " : "temperature "}minimum and maximum` : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
+    : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" ? (stationMean ? "mean temperature" : "temperature lows and highs") : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
   if (state.metric === "temperature")
     $("chart-description").textContent += " Warm colors show highs; cool colors show lows. Station lines are solid; Daymet dashed, Abiquiu dotted, and Albuquerque dash-dot.";
   if (comparisons.length)
-    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : ` ${state.showStation ? "No local daily values are available in this view yet" : "Station observations are hidden"}; only the selected controls are shown.`}`;
+    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationPlotted ? "" : ` ${state.showStation ? "No matching station values are available in this view" : "Station observations are hidden"}; only the selected controls are shown.`}`;
   if (state.metric === "solar")
     $("chart-description").textContent += " Solar means include nighttime readings. Sun angle, day length, shading, smoke, and clouds affect this light-derived estimate; it is not cloud-cover percentage.";
   $("chart").setAttribute(
