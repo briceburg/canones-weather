@@ -894,6 +894,8 @@ p {
 }
 .reference-option input { accent-color: var(--source-color); justify-self: center; margin: 0; }
 .reference-option:has(input:enabled) label { cursor: pointer; }
+.reference-option:has(> input:disabled) label { color: var(--muted); }
+.reference-option input:disabled + .source-swatch { opacity: .6; }
 .source-swatch { height: 3px; background: var(--source-swatch); }
 .source-location {
   display: grid;
