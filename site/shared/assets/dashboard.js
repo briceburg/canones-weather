@@ -39,6 +39,10 @@ const referenceSources = {
   abiquiu: {name: "Abiquiu Dam", color: "#86b4cb", high: "#d9a4bd", low: "#76cbb6", line: "dotted"},
   albuquerque: {name: "Albuquerque airport", color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
   "santa-fe": {name: "Santa Fe airport", color: "#cbab8a", high: "#f6a285", low: "#8cd6c6", line: [12, 5]},
+  charleston: {name: "Downtown Charleston", color: "#d6ae9a", high: "#f78979", low: "#9caee7", line: "dashed"},
+  crozier: {name: "Crozier", color: "#d7c58f", high: "#e3a78f", low: "#7cbbdc", line: [10, 3, 2, 3]},
+  bodega: {name: "Bodega Marine", color: "#96beb4", high: "#efc990", low: "#71cbc5", line: [4, 3, 1, 3]},
+  soller: {name: "Port de Sóller", color: "#bfacd7", high: "#e094ad", low: "#afb8e7", line: [6, 5]},
 };
 const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
 const minute = HOUR / 60;

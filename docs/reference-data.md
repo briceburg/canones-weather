@@ -17,6 +17,10 @@ mode for dates after the sample timeline.
 | Abiquiu Dam, USC00290041 | NOAA daily observations, supplemented by same-station RCC-ACIS reports; about 10.2 km / 6.3 mi away | 1,944.6 m |
 | Albuquerque airport, USW00023050 | Regional NOAA temperature and precipitation observations | 1,618.5 m |
 | Santa Fe airport, USW00023049 | Regional NOAA temperature and precipitation observations, about 68 km / 42 mi away | 1,916.3 m |
+| Downtown Charleston, USW00013782 | NOAA daily observations on the South Carolina coast | 3 m |
+| Crozier, USC00442142 | Virginia cooperative station observations from RCC-ACIS, with preliminary reports for recent dates | 85.3 m |
+| Bodega Marine Laboratory, USW00093245 | Direct NOAA U.S. Climate Reference Network daily observations from coastal Sonoma County | 19.2 m |
+| Port de Sóller, B051A | AEMET OpenData daily climatological observations from northern Mallorca, beginning September 2020 in the exported record | 5 m |
 | Secco Spring | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
 
 Abiquiu Dam is about 207 m below Secco Spring. Differences in terrain, elevation,
@@ -35,8 +39,10 @@ the daily mean used by the local chart; no mean is invented from highs and lows.
 and solar controls are unavailable. Reference precipitation includes snow water
 equivalent, which is different from the WS90's rainfall measurement.
 
-Daily timestamps label the provider's reporting date in America/Denver; they do
-not imply that NOAA's observation periods end at midnight. NOAA missing values,
+Daily timestamps label the provider's reporting date in America/Denver. Crozier
+retains its cooperative observer reporting dates. Bodega retains the USCRN local
+standard time calendar. Port de Sóller retains AEMET reporting dates and its
+07:00–07:00 precipitation reporting period. NOAA missing values,
 quality-flagged values, and presumed-zero measurements are excluded. Trace
 precipitation remains a flagged zero and is identified in daily tooltips.
 Multiday precipitation is not divided into invented daily totals.
@@ -94,22 +100,26 @@ For June 15–September 30, all 108 dates are available in each listed source (m
 
 ## Refreshing controls
 
-Provider downloads are free and the command needs no credentials. The
+NOAA and RCC-ACIS downloads need no credentials. Port de Sóller uses the free
+[AEMET OpenData API key](https://opendata.aemet.es/centrodedescargas/altaUsuario).
+Set `AEMET_API_KEY` in the environment or in the ignored local `.env` file. The
 published JSON records download URLs, citations, elevations, retrieval time, and
 source notes. Retain those attributions when redistributing it; the repository's
 software license does not replace provider data terms.
+Port de Sóller observations are © AEMET. See [AEMET’s reuse terms](https://www.aemet.es/en/nota_legal).
 
 ```sh
-uv run python -m canones_weather.reference --start-year 2016 --output tmp/reference
+uv run --env-file .env python -m canones_weather.reference --start-year 2016 --output tmp/reference
 # To publish, use uv run --group station, add --publish-config tmp/publisher.json,
 # and provide bucket-scoped credentials.
 ```
 
 Controls are generated outside Git and served from the configured R2 reference
 feed, independently of Pages builds. The local default output is ignored
-`tmp/reference/`. Use `--source abiquiu`, `albuquerque`, or `santa-fe` to refresh one source.
-the default `all` processes every source independently;
-failures in one source do not prevent processing the other. Each validated file
+`tmp/reference/`. Pass `--source` to refresh a single reference. The available keys
+are `abiquiu`, `albuquerque`, `santa-fe`, `charleston`, `crozier`, `bodega`,
+and `soller`. The default `all` processes every source independently so a failure
+in one source leaves the others able to refresh. Each validated file
 replaces its own R2 object only on successful upload; the last published data
 survives a failed refresh. Missing or invalid downloads are not published.
 
@@ -119,13 +129,14 @@ availability; `retrieved_at` describes the download time. The dashboard shows
 the latest date for the selected measurement and revalidates selected controls
 periodically in both modes.
 
-[The reference workflow](../.github/workflows/reference-data.yml) checks all three
+[The reference workflow](../.github/workflows/reference-data.yml) checks all seven
 references daily, when reference code or workflow changes reach `main`, and on
 manual dispatch. Its independent matrix jobs do
 not run on the Pi or modify the weather archive. Configure repository secrets
 `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` with the existing bucket-scoped
 publisher key, and repository variable `R2_PUBLISHER_CONFIG` with the non-secret
-OpenTofu publisher output. Keep source downloads out of Git.
+OpenTofu publisher output. The Sóller job uses the repository secret
+`AEMET_API_KEY`. Keep source downloads out of Git.
 
 GitHub can disable public-repository schedules after 60 days without repository
 activity. Watch workflow results and configure GitHub failure notifications;
@@ -140,4 +151,9 @@ artificial commits as a keepalive. A fresh download cannot remove provider lag.
   and [GHCN-Daily citation](https://doi.org/10.7289/V5D21VHZ).
 - [NOAA Albuquerque airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023050.dly)
   and [Santa Fe airport record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00023049.dly).
+- [NOAA Downtown Charleston record](https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USW00013782.dly),
+  [RCC-ACIS Crozier data access](https://docs.rcc-acis.org/acisws/),
+  and [NOAA USCRN daily data and format](https://www.ncei.noaa.gov/pub/data/uscrn/products/daily01/).
+- [AEMET Port de Sóller station](https://www.aemet.es/en/eltiempo/observacion/ultimosdatos?l=B051A)
+  and [AEMET OpenData climatological observations](https://opendata.aemet.es/dist/).
 - [NOAA data access and public-domain guidance](https://www.noaa.gov/office-education/outreach-communication/faq).
