@@ -73,7 +73,7 @@ Each row has `at` and these fields:
 | `wind_gust_m_s` | Maximum observed gust |
 | `rain_mm` | Interval total |
 | `solar_w_m2` | Mean light-derived solar irradiance, including nighttime; optional on older feeds |
-| `temperature_min_c`, `temperature_max_c` | Interval extrema; optional for older feeds |
+| `temperature_min_c`, `temperature_max_c` | Interval extrema; older hourly snapshots may omit them |
 
 Recent timestamps identify five-minute interval ends, matching the archive and
 current observation. Hourly and daily timestamps identify interval starts. Publish only completed history intervals;
@@ -90,9 +90,11 @@ Hourly and daily temperatures include mean, minimum, and maximum; averaging must
 extremes or turn missing rainfall into a dry period.
 
 The exporter supplies the last 24 hours at five-minute resolution in `recent`,
-30 days of hourly summaries, and daily summaries for the full archive. The browser
-uses hourly rows for 24h and daily rows for 30d/1y/3y/All. All means
-all daily history supplied by the feed. Chart windows do not set archive
+30 days of hourly summaries, and daily summaries for the full archive. The
+chart uses hourly rows in 24h and daily rows in broader views. Temperature
+charts show recorded lows and highs. The station feed also includes the measured
+mean. All includes the full daily history supplied by the feed.
+Chart windows do not set archive
 retention: retain the full five-minute archive and consistent off-device backups
 independently of these exports.
 
