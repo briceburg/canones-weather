@@ -44,7 +44,7 @@ def test_failed_provider_preserves_its_cache_and_does_not_stop_peer(tmp_path, mo
     monkeypatch.setattr(sys, "argv", ["reference", "--output", str(tmp_path)])
     assert reference.main() == 1
     assert prior.read_text() == "previous validated snapshot\n"
-    for key in reference.NOAA_STATIONS.keys() - {"abiquiu"}:
+    for key in reference.STATIONS.keys() - {"abiquiu"}:
         assert json.loads((tmp_path / f"{key}.json").read_text())["source"]["id"] == key
 
 
@@ -84,3 +84,32 @@ def test_reference_day_preserves_precipitation_when_temperature_is_missing():
     assert data["daily"][0]["rain_mm"] == 2.54
     assert data["daily"][0]["temperature_min_c"] is None
     assert data["daily"][0]["temperature_max_c"] is None
+
+
+def test_uscrn_uses_native_daily_units_and_leaves_missing_fields_empty():
+    text = """93245 20261119 2.622 -123.07 38.32 -9999.0 6.5 -9999.0 -9999.0 1.2
+93245 20261120 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 -9999.0
+"""
+    rows = reference.uscrn_rows(text, "USW00093245", 2026)
+    assert rows == {
+        date(2026, 11, 19): {"temperature_min_c": 6.5, "rain_mm": 1.2},
+        date(2026, 11, 20): {"temperature_min_c": 7.8, "temperature_max_c": 14.9},
+    }
+    with pytest.raises(ValueError, match="station"):
+        reference.uscrn_rows(text, "USW00003062", 2026)
+    with pytest.raises(ValueError, match="Incomplete USCRN annual file"):
+        reference.uscrn_rows(text, "USW00093245", 2026, complete_year=True)
+
+
+def test_aemet_parses_trace_and_skips_multiday_precipitation():
+    first, last = date(2026, 11, 19), date(2026, 11, 20)
+    records = [
+        {"fecha": first.isoformat(), "indicativo": "B051A", "tmin": "7,8", "prec": "Ip"},
+        {"fecha": last.isoformat(), "indicativo": "B051A", "tmax": "14,9", "prec": "Acum"},
+    ]
+    assert reference.aemet_rows(records, "B051A", first, last) == {
+        first: {"temperature_min_c": 7.8, "rain_mm": 0.0, "precipitation_trace": True},
+        last: {"temperature_max_c": 14.9},
+    }
+    with pytest.raises(ValueError, match="reporting calendar"):
+        reference.aemet_rows([*records, records[-1]], "B051A", first, last)

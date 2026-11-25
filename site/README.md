@@ -93,7 +93,8 @@ The sample generator uses only Python's standard library.
 ## Historical controls
 
 The chart-source checkboxes independently select station observations,
-Abiquiu Dam, Albuquerque airport, and Santa Fe airport
+Abiquiu Dam, Albuquerque airport, Santa Fe airport, Downtown Charleston,
+Crozier, Bodega Marine, and Port de Sóller
 in Sample or Live mode. The chart starts with station observations.
 References appear only for historical temperature and
 precipitation views; selections persist in unsupported views without changing
