@@ -656,8 +656,6 @@ function renderChart() {
   $("chart-description").textContent = seasonal
     ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
     : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" ? `${stationHasData ? "mean temperature, with " : "temperature "}minimum and maximum` : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
-  if (state.metric === "temperature")
-    $("chart-description").textContent += " Warm colors show highs, and cool colors show lows. Line patterns distinguish the sources.";
   if (comparisons.length)
     $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : ` ${state.showStation ? "No local daily values are available in this view yet" : "Station observations are hidden"}; only the selected controls are shown.`}`;
   if (state.metric === "solar")
