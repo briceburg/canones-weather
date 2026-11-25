@@ -1,6 +1,8 @@
 import json
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
+from types import SimpleNamespace
+from urllib.error import HTTPError
 
 import pytest
 
@@ -99,6 +101,25 @@ def test_uscrn_uses_native_daily_units_and_leaves_missing_fields_empty():
         reference.uscrn_rows(text, "USW00003062", 2026)
     with pytest.raises(ValueError, match="Incomplete USCRN annual file"):
         reference.uscrn_rows(text, "USW00093245", 2026, complete_year=True)
+
+
+@pytest.mark.parametrize(("runner_day", "last_record"), [(1, 30), (2, 31), (3, 31)])
+def test_bodega_refresh_handles_the_local_year_rollover(monkeypatch, runner_day, last_record):
+    class RunnerTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 1, runner_day, 7, 17, tzinfo=timezone.utc).astimezone(tz or timezone.utc)
+
+    def download(url):
+        if "/2026/" in url:
+            raise HTTPError(url, 404, "Not yet available", None, None)
+        return f"93245 202512{last_record} 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 0.0"
+
+    monkeypatch.setattr(reference, "datetime", RunnerTime)
+    monkeypatch.setattr(reference, "download", download)
+    data = reference.fetch_reference("bodega", SimpleNamespace(start_year=2025, end_year=None))
+    assert data["available_through"] == f"2025-12-{last_record}"
+    assert len(data["source"]["download_urls"]) == 1
 
 
 def test_aemet_parses_trace_and_skips_multiday_precipitation():
