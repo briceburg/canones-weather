@@ -23,15 +23,15 @@ SOURCE_STYLES = {
 }
 
 REFERENCE_GROUPS = {
-    "New Mexico": (
-        ("abiquiu", "Abiquiu Dam", ""),
-        ("santa-fe", "Santa Fe airport", ""),
-        ("albuquerque", "Albuquerque airport", ""),
-        ("gila-hot-springs", "Gila Hot Springs", ""),
+    "Regional": (
+        ("abiquiu", "Abiquiu Dam", "NM"),
+        ("santa-fe", "Santa Fe airport", "NM"),
+        ("albuquerque", "Albuquerque airport", "NM"),
+        ("gila-hot-springs", "Gila Hot Springs", "NM"),
     ),
     "Coastal": (
         ("bodega", "Bodega Marine", "CA"),
-        ("soller", "Port de Sóller", "Mallorca · © AEMET"),
+        ("soller", "Port de Sóller", "Mallorca"),
         ("charleston", "Downtown Charleston", "SC"),
     ),
     "Places of Excellence": (
@@ -58,7 +58,6 @@ def source_option(key, name, place, url, *, metrics=None):
         swatch = f"repeating-linear-gradient(90deg, {', '.join(stops)})"
     pattern = " ".join(map(str, dashes))
     name = escape(name)
-    hint = f'<span class="source-place">{escape(place)}</span>' if place else ""
     input_id = f"reference-{key}" if metrics else "show-station-history"
     attributes = f'data-control="{key}" data-name="{name}" data-metrics="{metrics}"' if metrics else "checked"
     status = f'<span class="source-status" id="{input_id}-status" hidden>No data</span>' if metrics else ""
@@ -70,7 +69,7 @@ def source_option(key, name, place, url, *, metrics=None):
         f'<span class="source-location"><span class="source-title"><label for="{input_id}">{name}</label>'
         f'<a class="source-map" href="{escape(url)}" aria-label="Map of {name} (opens in a new tab)" '
         f'target="_blank" rel="noopener"><span class="map-pin" aria-hidden="true"></span></a></span>'
-        f"{hint}{status}</span></span>"
+        f'<span class="source-place">{escape(place)}</span>{status}</span></span>'
     )
 
 
@@ -118,7 +117,7 @@ def build_site(repo_root, output_root):
             local_source = source_option(
                 station["id"],
                 station["name"],
-                "",
+                "NM",
                 map_url(*STATION_LOCATION, zoom=15),
             )
             html = html.replace("{{ station_option }}", local_source)
