@@ -12,6 +12,12 @@ With Ansible installed, set these values in the ignored `.env`:
 - `WEATHER_GATEWAY_URL`: the gateway HTTP origin. The pinned driver uses HTTP.
 - `WEATHER_ELEVATION_M`: ground elevation in metres above sea level.
 
+Prefer local DNS names for both the gateway origin and SSH target. After a
+router or DHCP change, verify that those names resolve and that the gateway
+responds from the Pi, then redeploy with the updated local configuration.
+An existing collector configuration can still point to an old numeric address
+even when new DHCP reservations and DNS records are correct.
+
 From repository root:
 
 ```sh
@@ -118,6 +124,13 @@ and passed to an isolated service. `canones-weather-publish.timer` uploads histo
 then current JSON every five minutes, preserving the observation time and dataset
 notice. It rejects samples, mismatched datasets, and unverified production data.
 The broad Cloudflare infrastructure token belongs only on the deployment host.
+
+Successful uploads do not establish that collection is current: the publisher
+can upload the last exported files repeatedly. Check `observed_at` in
+`current.json`, `through` in `history.json`, the archive's latest record, and the
+collector's restart count and logs. File modification or upload times are not
+observation times. See [outages and SD recovery](../../docs/station.md#outages-and-recovery)
+before enabling catch-up or importing gateway files.
 
 Inspect publishing with `systemctl status canones-weather-publish.timer` and
 `journalctl -u canones-weather-publish.service` on the Pi. Stop public updates with

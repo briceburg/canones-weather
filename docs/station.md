@@ -40,9 +40,45 @@ disabled until mapping is verified; exclude indoor and garage temperatures.
 
 ## Outages and recovery
 
-No gateway SD card is installed. A Pi outage can leave gaps in the archive.
-Local collection must continue during internet outages. Verify gateway history
-retrieval before relying on SD-card recovery.
+The GW3000 has an SD card configured for five-minute logging, matching the
+WeeWX archive interval. This is separate from WeeWX's 20-second live polling.
+The card provides another local copy of sensor readings while the gateway has
+power and receives them; it cannot recover periods before recording began or
+while the gateway itself was unavailable. Retain the permanent WeeWX archive
+and its off-device backups independently.
+
+The pilot generates archive records in software and explicitly sets
+`no_catchup = True`. Installing a card does not automatically backfill WeeWX.
+The pinned driver supports SD-card startup catch-up, but it starts after the
+last archived timestamp; it does not repair older holes followed by later
+archive records.
+
+Before enabling catch-up or importing files, validate recovery against a copy
+of the archive. Keep the original CSV files and their unit headers, local time
+labels, epoch timestamps, sensor provenance, and logging interval. Check for
+restarts, irregular interval boundaries, and uncovered periods. Equal logging
+intervals do not establish that SD readings and software archive aggregates are
+equivalent.
+
+The live-packet solar correction divides by 126.7 because the driver normalizes
+live light readings to lux. SD files can already contain solar radiation in
+W/m²; applying that same correction to these recovered records would make them
+incorrect. Recovery needs source-appropriate calibration and validated rain
+counter handling before it is enabled. Preserve the pilot's unverified status;
+recovery does not verify sensor mapping or authorize weather-network uploads.
+
+SD files are listed through the gateway HTTP API and downloaded on TCP port 81.
+Access to the gateway's web interface on port 80 does not by itself provide
+access to the download port. The Pi can retrieve files over its local LAN
+connection without adding another remote firewall rule. See the
+[GW3000 SD-card manual](https://oss.ecowitt.net/uploads/20260320/GW3000Manual.pdf#page=72)
+and the [pinned driver's catch-up implementation](https://github.com/weewx-contrib/weewx-ecowitt_local_http/blob/6876b2ecbab88f825dde1b0b7c5874cb5fd3c25e/bin/user/ecowitt_http.py).
+
+Local collection must continue during internet outages when the Pi, gateway,
+sensor reception, and LAN remain available. A WAN interruption can delay
+publishing without causing missing local archive records. Compare the archive,
+export observation timestamps, collector logs, and publisher logs before
+attributing a chart gap to internet connectivity.
 
 ## Commissioning
 
