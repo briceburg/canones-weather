@@ -29,6 +29,14 @@ account, syncs the locked `station` dependency group, and enables
 `canones-weather-pilot.service`. It checks that radio-pad's service state, main
 PID, and activation time are unchanged.
 
+Station identity and display metadata come from
+[`src/canones_weather/station.json`](../../src/canones_weather/station.json),
+which deployment copies beside the Python modules. Ansible also uses it for the
+WeeWX location label and service time zone. To rename the station, edit `name`
+there, rebuild the websites, and run `bin/pi deploy` with the existing local
+configuration. Subsequent exports carry the new name; station IDs, dataset IDs,
+and archives stay unchanged.
+
 | Path | Contents |
 | --- | --- |
 | `/opt/canones-weather` | Root-owned application, virtualenv, and pinned driver |

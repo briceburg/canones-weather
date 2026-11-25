@@ -217,7 +217,7 @@ def fetch_reference(key, args):
             "latitude": args.latitude,
             "longitude": args.longitude,
             "elevation_m": elevation,
-            "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from Secco Creek. Leap-year December 31 is absent; gaps are preserved.",
+            "notes": "1 km gridded estimate, not a station measurement. Grid elevation differs from the local station. Leap-year December 31 is absent; gaps are preserved.",
         }
     else:
         station = NOAA_STATIONS[key]
@@ -231,7 +231,7 @@ def fetch_reference(key, args):
             "url": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
             "download_url": url,
             "citation": "https://doi.org/10.7289/V5D21VHZ",
-            "notes": "Regional comparison, not Secco Creek weather. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero.",
+            "notes": "Regional comparison, not local station measurements. Reporting dates may cover non-midnight periods. Quality-flagged, missing and presumed-zero values are excluded; trace precipitation is flagged zero.",
         }
         if key == "abiquiu":
             source["supplement"] = supplement_abiquiu(text, rows, start, end)

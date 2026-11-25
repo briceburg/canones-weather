@@ -3,11 +3,17 @@
 
 import json
 import math
+import sys
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-ZONE = ZoneInfo("America/Denver")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from canones_weather.station import load_station  # noqa: E402
+
+STATION = load_station()
+ZONE = ZoneInfo(STATION["timezone"])
 THROUGH = datetime(2026, 8, 15, 18, tzinfo=timezone.utc)
 START = date(2024, 1, 1)
 FIELDS = ("temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm", "solar_w_m2")
@@ -97,7 +103,7 @@ def main():
     current = {
         "schema_version": 1,
         "kind": "sample",
-        "station": {"id": "canones", "name": "Secco Creek", "timezone": str(ZONE)},
+        "station": STATION,
         "observed_at": iso(stop),
         "outdoor": {
             "source": "Synthetic sample observations",
@@ -113,7 +119,7 @@ def main():
     history = {
         "schema_version": 1,
         "kind": "sample",
-        "station_id": "canones",
+        "station_id": STATION["id"],
         "through": iso(stop),
         "record_started_at": iso(datetime.combine(START, time(), ZONE).timestamp() + 300),
         "recent": recent,

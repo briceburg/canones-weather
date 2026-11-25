@@ -1,12 +1,13 @@
-#!/usr/bin/env bash
-set -euo pipefail
-cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+#!/usr/bin/env python3
+"""Build both static sites without installing project dependencies."""
 
-for name in hub canones; do
-  rm -rf -- "dist/$name"
-  mkdir -p "dist/$name"
-  cp -R "site/$name/." "dist/$name/"
-  cp -R site/shared/assets "dist/$name/"
-  cp site/shared/_headers "dist/$name/"
-done
-printf 'Built dist/hub and dist/canones\n'
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from canones_weather.site import build_site  # noqa: E402
+
+build_site(ROOT, ROOT / "dist")
+print("Built dist/hub and dist/canones")

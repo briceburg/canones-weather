@@ -1,7 +1,7 @@
 # Regional reference history
 
 Reference history compares weather across locations: for example, Albuquerque's
-monsoon rain against Secco Creek's. Sources need not share the station's climate;
+monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
 Select references in the dashboard to compare temperature and precipitation
 in 30d, 1y, 3y, All, Seasons, or Monsoon. Unsupported views preserve source
@@ -13,14 +13,14 @@ commissioning date.
 
 | Control | What it represents | Elevation |
 | --- | --- | --- |
-| Daymet | Estimated weather for the 1 km grid cell requested at Secco Creek's coordinates | 2,328 m, as returned by the provider |
+| Daymet | Estimated weather for the 1 km grid cell requested at Secco Spring's coordinates | 2,328 m, as returned by the provider |
 | Abiquiu Dam, USC00290041 | NOAA daily observations, supplemented by same-station RCC-ACIS reports; about 10.2 km / 6.3 mi away | 1,944.6 m |
 | Albuquerque airport, USW00023050 | Regional NOAA temperature and precipitation observations | 1,618.5 m |
 | Madrid 1.9 SE, US1NMSF0189 | Regional NOAA/CoCoRaHS precipitation observations, beginning June 2021 | 1,923.6 m |
-| Secco Creek | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
+| Secco Spring | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
 
 Daymet incorporates station observations and terrain in a gridded model. Its grid
-elevation is about 176 m above Secco Creek; Abiquiu Dam is about 207 m below.
+elevation is about 176 m above Secco Spring; Abiquiu Dam is about 207 m below.
 Differences in terrain, elevation, exposure, and storms are part of these regional
 comparisons, rather than errors to adjust away.
 
@@ -100,7 +100,7 @@ For June 15–September 30, all 108 dates are available in each listed source (m
 | 2025 | 201.65 | 107.30 | 78.40 | 149.30 |
 
 These differences are comparisons between sources, not error estimates against
-Secco Creek. Daymet uses station inputs, so comparing it to a nearby station is
+Secco Spring. Daymet uses station inputs, so comparing it to a nearby station is
 not necessarily an independent model validation.
 
 ## Refreshing controls

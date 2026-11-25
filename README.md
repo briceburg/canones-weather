@@ -2,7 +2,7 @@
 
 ![Iceburg Weather: Weather, close to home. Mountain artwork for Cañones, New Mexico.](docs/assets/readme-banner.svg)
 
-Local weather from Secco Creek in Cañones, New Mexico. A small, open-source
+Local weather from Secco Spring in Cañones, New Mexico. A small, open-source
 project for exploring observations through the day, across seasons, and over
 the years—with a public dashboard and reusable data.
 
@@ -21,7 +21,7 @@ the years—with a public dashboard and reusable data.
 <details>
 <summary>See the station dashboard · sample data</summary>
 
-![Secco Creek dashboard showing illustrative station observations overlaid with attributed Daymet and NOAA reference data.](docs/assets/dashboard-preview.png)
+![Secco Spring dashboard showing illustrative station observations overlaid with attributed Daymet and NOAA reference data.](docs/assets/dashboard-preview.png)
 
 </details>
 

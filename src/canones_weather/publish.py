@@ -9,6 +9,8 @@ from urllib.parse import urlsplit
 import boto3
 from botocore.config import Config
 
+from canones_weather.station import load_station
+
 log = logging.getLogger(__name__)
 
 
@@ -38,7 +40,8 @@ def publish(config):
     deployment = current.get("deployment", {})
     if any(document.get("kind") != "live" or document.get("schema_version") != 1 for document in documents.values()):
         raise ValueError("Only version-1 measured observations can be published")
-    if current.get("station", {}).get("id") != "canones" or history.get("station_id") != "canones":
+    station_id = load_station()["id"]
+    if current.get("station", {}).get("id") != station_id or history.get("station_id") != station_id:
         raise ValueError("Publisher station identity does not match")
     if not deployment.get("dataset_id") or deployment != history.get("deployment"):
         raise ValueError("Current and history must belong to the same deployment dataset")

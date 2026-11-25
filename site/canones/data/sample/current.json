@@ -3,7 +3,7 @@
   "kind": "sample",
   "station": {
     "id": "canones",
-    "name": "Secco Creek",
+    "name": "Secco Spring",
     "timezone": "America/Denver"
   },
   "observed_at": "2026-08-15T18:00:00Z",

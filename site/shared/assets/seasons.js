@@ -1,15 +1,15 @@
 // Summaries of observed days, not estimates for missing days or climate normals.
-const localDate = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit",
-});
 const numeric = (value) => typeof value === "number" && Number.isFinite(value);
 const fields = {
   temperature_c: "mean", temperature_min_c: "min", temperature_max_c: "max",
   solar_w_m2: "mean", humidity_pct: "mean", wind_speed_m_s: "mean", wind_gust_m_s: "max", rain_mm: "sum",
 };
 
-export function seasonalRows(daily, monsoon = false) {
+export function seasonalRows(daily, monsoon, timeZone) {
   if (!daily.length) return [];
+  const localDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
   const dates = daily.map((row) => {
     const parts = Object.fromEntries(localDate.formatToParts(new Date(row.at)).map(({type, value}) => [type, value]));
     return { row, year: +parts.year, month: +parts.month, day: +parts.day };
