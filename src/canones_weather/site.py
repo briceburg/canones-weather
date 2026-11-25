@@ -15,12 +15,12 @@ REFERENCE_GROUPS = {
         ("albuquerque", "Albuquerque airport", ""),
         ("gila-hot-springs", "Gila Hot Springs", ""),
     ),
-    "Coastal weather": (
+    "Coastal": (
         ("bodega", "Bodega Marine", ", CA"),
         ("soller", "Port de Sóller", ", Mallorca · © AEMET"),
         ("charleston", "Downtown Charleston", ", SC"),
     ),
-    "More U.S. stations": (
+    "Places of interest": (
         ("crozier", "Crozier", ", VA"),
         ("milwaukee", "Milwaukee airport", ", WI"),
     ),

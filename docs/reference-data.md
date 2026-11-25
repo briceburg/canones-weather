@@ -27,7 +27,7 @@ Station names link to the observing sites on OpenStreetMap.
 | [Downtown Charleston, SC][charleston-map] (USW00013782) | NOAA daily observations | 3 m |
 | [Crozier, VA][crozier-map] (USC00442142) | RCC-ACIS cooperative station observations. Recent reports may be preliminary. | 85.3 m |
 | [Bodega Marine Laboratory, CA][bodega-map] (USW00093245) | NOAA U.S. Climate Reference Network daily observations, coastal Sonoma County | 19.2 m |
-| [Milwaukee Mitchell Airport, WI][milwaukee-map] (USW00014839) | NOAA daily observations | 203.3 m |
+| [Milwaukee Mitchell Airport, WI][milwaukee-map] (USW00014839) | NOAA daily observations in the Lake Michigan region | 203.3 m |
 | [Port de Sóller, Mallorca][soller-map] (B051A) | AEMET OpenData daily observations from September 2020 in the exported record | 5 m |
 | [Secco Spring, NM][secco-map] | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
 
