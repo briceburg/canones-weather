@@ -154,6 +154,22 @@
       register: weather_radio_after
       changed_when: false
       failed_when: weather_radio_after.stdout != weather_radio_before.stdout
+    - name: Install gateway SD recovery units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - canones-weather-recover.service
+        - canones-weather-recover.timer
+    - name: Set gateway SD recovery timer state
+      ansible.builtin.systemd_service:
+        name: canones-weather-recover.timer
+        daemon_reload: true
+        enabled: "{{ weather_sd_recovery | default(false) | bool }}"
+        state: "{{ 'started' if weather_sd_recovery | default(false) | bool else 'stopped' }}"
   handlers:
     - name: Restart weather pilot
       ansible.builtin.systemd_service:

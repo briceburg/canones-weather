@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry Canones gateway SD recovery every fifteen minutes
+
+[Timer]
+OnBootSec=7min
+OnUnitInactiveSec=15min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

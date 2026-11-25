@@ -61,6 +61,27 @@ radiation maps to the gateway's light field. The driver normalizes that field
 to lux; the collector reverses its 126.7 conversion to restore W/m². Verify units and mapping against the
 raw gateway response. See [station requirements](../../docs/station.md).
 
+## Recover missing pilot observations
+
+Set `WEATHER_SD_RECOVERY=1` in the ignored `.env`, source it as shown above, and
+run `bin/pi deploy` to enable the fifteen-minute recovery timer. Take a
+consistent archive backup first. Set the value to `0` and redeploy to stop
+scheduled recovery. The collector can run independently of the timer.
+
+To preview recovery on the Pi, run:
+
+```sh
+sudo -u canones-weather /opt/canones-weather/.venv/bin/python \
+  -m canones_weather.recover /var/lib/canones-weather/pilot/weewx.conf --dry-run
+```
+
+The preview saves validated SD CSVs under the pilot's private `recovery/`
+directory and reports the number of eligible records. The timer reports
+insertions and download failures in `journalctl -u canones-weather-recover.service`.
+The next successful collector export includes the recovered observations.
+See [outages and recovery](../../docs/station.md#outages-and-recovery) for
+coverage, provenance, and measurement limitations.
+
 ## Inspect the pilot in the local dashboard
 
 ```sh

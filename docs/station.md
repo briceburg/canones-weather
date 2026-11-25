@@ -46,26 +46,22 @@ while the gateway has power and receives sensor data. It cannot recover readings
 from before recording began or while power or reception was lost. Retain the
 permanent WeeWX archive and off-device backups independently.
 
-The pilot uses software archive generation with `no_catchup = True`, so SD data
-is not imported automatically. The pinned driver's startup catch-up retrieves
-records after the last archived timestamp; older holes require separate recovery.
+The optional [SD recovery timer](../deploy/raspberry-pi/README.md#recover-missing-pilot-observations)
+fills absent records within the latest 31 days of pilot history once live
+collection resumes. It uses samples whose local and epoch times agree on a
+five-minute logging minute. Off-grid, conflicting, or unavailable samples leave
+gaps. Existing archive rows take precedence. WeeWX's built-in startup catch-up
+remains disabled.
 
-Validate recovery against an archive copy before enabling catch-up or importing
-files. Preserve original CSV files, units, local and epoch timestamps, sensor
-provenance, and logging interval. Check clock changes, irregular boundaries,
-missing coverage, and aggregation differences; equal intervals do not establish
-that SD readings and WeeWX aggregates are equivalent.
+SD samples use the units in the CSV header. Solar radiation already in W/m²
+bypasses the live lux correction. Rain stays missing because counter differences
+can overlap rainfall already recorded across an outage. Recovered samples
+contribute to the usual summaries and may differ from the live polling
+aggregates. The private archive records their origin in `canones_recovery`.
 
-The live solar correction divides the driver's lux values by 126.7. SD files can
-already contain W/m², so that correction would make recovered irradiance wrong.
-Recovery requires source-appropriate calibration and rain counter handling while
-preserving the pilot's unverified provenance and disabled weather-network uploads.
-
-The driver lists SD files through the gateway HTTP API on port 80 and downloads
-them on TCP port 81. The Pi can retrieve them over the LAN when remote firewall
-rules allow only port 80. See the
-[GW3000 SD-card manual](https://oss.ecowitt.net/uploads/20260320/GW3000Manual.pdf#page=72)
-and the [pinned driver's catch-up implementation](https://github.com/weewx-contrib/weewx-ecowitt_local_http/blob/6876b2ecbab88f825dde1b0b7c5874cb5fd3c25e/bin/user/ecowitt_http.py).
+SD recovery needs gateway HTTP on port 80 for the file list and TCP port 81 for
+downloads. The Pi can use its LAN connection for both. See the
+[GW3000 SD-card manual](https://oss.ecowitt.net/uploads/20260320/GW3000Manual.pdf#page=72).
 
 During internet outages, collection should continue while the Pi, gateway, LAN,
 and sensor reception remain available. Compare archive and export observation

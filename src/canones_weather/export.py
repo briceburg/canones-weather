@@ -5,6 +5,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 
+import weedb
 import weewx
 import weewx.engine
 import weewx.units
@@ -64,6 +65,14 @@ def history_rows(manager, start, stop, interval):
 
 
 def export(manager, record, output_root):
+    # Recovery can insert old rows concurrently; all summaries need one snapshot.
+    with weedb.Transaction(manager.connection):
+        current, history = documents(manager, record)
+    write_json(Path(output_root) / "history.json", history)
+    write_json(Path(output_root) / "current.json", current)
+
+
+def documents(manager, record):
     station = load_station()
     metric = weewx.units.to_std_system(record, weewx.METRICWX)
     timestamp = record["dateTime"]
@@ -130,8 +139,7 @@ def export(manager, record, output_root):
             "uv_index": number(metric.get("UV")),
         },
     }
-    write_json(Path(output_root) / "history.json", history)
-    write_json(Path(output_root) / "current.json", current)
+    return current, history
 
 
 class JSONReport(weewx.engine.StdService):
