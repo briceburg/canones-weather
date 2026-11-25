@@ -3,25 +3,39 @@
 Reference history compares weather across locations: for example, Albuquerque's
 monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
-Select references in the dashboard to compare temperature and precipitation
-in 30d, 1y, 3y, All, Seasons, or Monsoon. Unsupported views preserve source
-selections without changing the period or measurement. Current conditions always
-remain the local station's observations.
+Select references in the dashboard to compare daily temperature and precipitation
+in 30d, 1y, 3y, All, Seasons, or Monsoon. You can also widen the 24h timeline past
+24 hours to switch to daily summaries and show the selected references. The
+dashboard remembers your selections when you return to hourly history or switch
+measurements. Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
 commissioning date. Sample mode ends at its fixed fixture timestamp. Use Live
 mode for dates after the sample timeline.
 
-| Control | What it represents | Elevation |
+## Station locations
+
+Station names link to the observing sites on OpenStreetMap.
+
+| Station | Data source | Elevation |
 | --- | --- | --- |
-| Abiquiu Dam, USC00290041 | NOAA daily observations, supplemented by same-station RCC-ACIS reports; about 10.2 km / 6.3 mi away | 1,944.6 m |
-| Albuquerque airport, USW00023050 | Regional NOAA temperature and precipitation observations | 1,618.5 m |
-| Santa Fe airport, USW00023049 | Regional NOAA temperature and precipitation observations, about 68 km / 42 mi away | 1,916.3 m |
-| Downtown Charleston, USW00013782 | NOAA daily observations on the South Carolina coast | 3 m |
-| Crozier, USC00442142 | Virginia cooperative station observations from RCC-ACIS, with preliminary reports for recent dates | 85.3 m |
-| Bodega Marine Laboratory, USW00093245 | Direct NOAA U.S. Climate Reference Network daily observations from coastal Sonoma County | 19.2 m |
-| Port de Sóller, B051A | AEMET OpenData daily climatological observations from northern Mallorca, beginning September 2020 in the exported record | 5 m |
-| Secco Spring | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
+| [Abiquiu Dam, NM][abiquiu-map] (USC00290041) | NOAA daily observations with same-station RCC-ACIS reports, about 10.2 km / 6.3 mi away | 1,944.6 m |
+| [Albuquerque airport, NM][albuquerque-map] (USW00023050) | NOAA daily observations | 1,618.5 m |
+| [Santa Fe airport, NM][santa-fe-map] (USW00023049) | NOAA daily observations, about 68 km / 42 mi away | 1,916.3 m |
+| [Downtown Charleston, SC][charleston-map] (USW00013782) | NOAA daily observations | 3 m |
+| [Crozier, VA][crozier-map] (USC00442142) | RCC-ACIS cooperative station observations. Recent reports may be preliminary. | 85.3 m |
+| [Bodega Marine Laboratory, CA][bodega-map] (USW00093245) | NOAA U.S. Climate Reference Network daily observations, coastal Sonoma County | 19.2 m |
+| [Port de Sóller, Mallorca][soller-map] (B051A) | AEMET OpenData daily observations from September 2020 in the exported record | 5 m |
+| [Secco Spring, NM][secco-map] | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
+
+[abiquiu-map]: https://www.openstreetmap.org/?mlat=36.2403&mlon=-106.4278#map=14/36.2403/-106.4278
+[albuquerque-map]: https://www.openstreetmap.org/?mlat=35.0419&mlon=-106.6156#map=14/35.0419/-106.6156
+[santa-fe-map]: https://www.openstreetmap.org/?mlat=35.6108&mlon=-106.0958#map=14/35.6108/-106.0958
+[charleston-map]: https://www.openstreetmap.org/?mlat=32.7750&mlon=-79.9239#map=14/32.7750/-79.9239
+[crozier-map]: https://www.openstreetmap.org/?mlat=37.6664&mlon=-77.8769#map=14/37.6664/-77.8769
+[bodega-map]: https://www.openstreetmap.org/?mlat=38.3208&mlon=-123.0747#map=14/38.3208/-123.0747
+[soller-map]: https://www.openstreetmap.org/?mlat=39.7956&mlon=2.6914#map=14/39.7956/2.6914
+[secco-map]: https://www.openstreetmap.org/?mlat=36.150028&mlon=-106.445500#map=14/36.150028/-106.445500
 
 Abiquiu Dam is about 207 m below Secco Spring. Differences in terrain, elevation,
 exposure, and storms are part of these regional comparisons.
