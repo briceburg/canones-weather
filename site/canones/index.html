@@ -268,10 +268,21 @@
             role="img"
             aria-label="Weather history chart. Loading sample data."
           ></div>
-          <div class="timeline-navigation" id="timeline-navigation" role="group" aria-label="Move the chart window" hidden>
-            <button type="button" id="timeline-earlier">← Earlier</button>
-            <span id="timeline-window"></span>
-            <button type="button" id="timeline-later">Later →</button>
+          <div class="timeline-controls" id="timeline-controls" hidden>
+            <div class="timeline-navigation" role="group" aria-label="Move the chart window">
+              <button type="button" id="timeline-earlier">← Earlier</button>
+              <span id="timeline-window" role="status"></span>
+              <button type="button" id="timeline-later">Later →</button>
+            </div>
+            <details id="timeline-dates">
+              <summary>Set date range</summary>
+              <form id="timeline-dates-form">
+                <label>From (UTC) <input id="timeline-from" type="datetime-local" required /></label>
+                <label>To (UTC) <input id="timeline-to" type="datetime-local" required /></label>
+                <button type="submit">Apply</button>
+                <span id="timeline-dates-error" role="status"></span>
+              </form>
+            </details>
           </div>
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>

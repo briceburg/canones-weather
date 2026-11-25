@@ -526,17 +526,20 @@ p {
   width: 100%;
   margin-top: 12px;
 }
+.timeline-controls {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 .timeline-navigation {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
   text-align: center;
-  color: var(--muted);
-  font-size: 0.75rem;
 }
-.timeline-navigation button {
+.timeline-controls button,
+.timeline-controls input {
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 8px;
@@ -545,8 +548,24 @@ p {
   font-size: inherit;
   white-space: nowrap;
 }
-.timeline-navigation button:disabled {
+.timeline-controls button:disabled {
   opacity: 0.5;
+}
+.timeline-controls details {
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px auto;
+}
+.timeline-controls form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.timeline-controls label {
+  display: grid;
+  gap: 4px;
 }
 .history-foot {
   display: flex;

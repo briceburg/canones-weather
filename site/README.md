@@ -40,9 +40,10 @@ Display units do not change stored data; see [the data contract](../docs/data.md
 Live presets end at the visitor's current time and show gaps if observations
 are missing. Sample presets end at the sample timestamp. Drag the timeline
 window to pan without changing its width. Earlier and Later step by an hour
-in 24h and by a day in longer views. Drag the handles or select across the
-plot to resize. A custom window retains its dates across measurement and
-unit changes and feed refreshes. Select a period or data mode to reset it.
+in 24h and by a day in longer views. Drag the handles, select across the
+plot, or open Set date range to enter both ends in UTC. A custom window
+retains its dates across measurement and unit changes and feed refreshes.
+Select a period or data mode to reset it.
 
 The heading's clock uses the visitor's device time, displayed in the configured
 station time zone. It is independent of observation timestamps.
