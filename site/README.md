@@ -33,14 +33,16 @@ see the [Pi guide](../deploy/raspberry-pi/README.md).
 ## Charts
 
 Select temperature, humidity, wind, rain, or solar irradiance. The 24h view uses
-five-minute readings where available; 30d, 1y, 3y, and All use daily summaries,
+hourly summaries. The 30d, 1y, 3y, and All views use daily summaries,
 including temperature mean/low/high. Seasons and Monsoon aggregate daily records.
 Display units do not change stored data; see [the data contract](../docs/data.md).
 
-Drag across the plot to zoom; move the slider window to pan or its handles to
-resize. A custom window retains its dates across unit/measurement changes and
-refreshes. Selecting a period or data mode resets it. The footer identifies the
-available record, which may extend beyond the displayed window.
+Live presets end at the visitor's current time and show gaps if observations
+are missing. Sample presets end at the sample timestamp. Drag the timeline
+window to pan without changing its width. Earlier and Later step by an hour
+in 24h and by a day in longer views. Drag the handles or select across the
+plot to resize. A custom window retains its dates across measurement and
+unit changes and feed refreshes. Select a period or data mode to reset it.
 
 The heading's clock uses the visitor's device time, displayed in the configured
 station time zone. It is independent of observation timestamps.
