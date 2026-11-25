@@ -368,8 +368,7 @@ function renderChart() {
   $("history-subtitle").textContent = state.showStation
     ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
     : "Station observations hidden · Mountain Time";
-  $("history-resolution").textContent =
-    seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
+  $("history-resolution").textContent = `${resolution} summaries`;
   const referenceMetric = ["temperature", "rain"].includes(state.metric);
   const eligible = (daily || seasonal) && referenceMetric;
   $("reference-sources").disabled = !eligible;
@@ -418,11 +417,19 @@ function renderChart() {
   $("history-range").textContent = !endpoints.length ? "No history available" : seasonal
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(new Date(endpoints[0].at))} – ${dateFormat.format(new Date(endpoints.at(-1).at))}`;
-  const stationHasData = rows.some((row) => numeric(row[field]));
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
+  const stationPrefix = referenceHasData ? `${stationName} · ` : "";
+  const temperaturePrefix = stationPrefix || `${resolution} `;
+  const stationFields = state.metric === "temperature" ? [
+    ["temperature_min_c", `${temperaturePrefix}low`, "#7fc9e4", 1.5],
+    ["temperature_max_c", `${temperaturePrefix}high`, "#edb46f", 1.5],
+  ] : [[field, stationPrefix ? stationPrefix + label.toLowerCase() : label, color]];
+  if (state.metric === "wind") stationFields.push(["wind_gust_m_s", "Peak gust", "#d7c7a4", 1, "dashed"]);
+  const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
+  const stationHasData = plottedFields.length > 0;
   function describeCoverage(view) {
     const inWindow = (row) => !view || (Date.parse(row.at) >= view.from && Date.parse(row.at) <= view.to);
-    const stationInWindow = rows.some((row) => numeric(row[field]) && inWindow(row));
+    const stationInWindow = rows.some((row) => inWindow(row) && plottedFields.some(([key]) => numeric(row[key])));
     const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
       inWindow(row) && hasReferenceValue(row)));
     if (showReferences)
@@ -432,7 +439,9 @@ function renderChart() {
     const status = controlNote + (comparisons.length && !referenceInWindow
       ? " · No reference observations in this window" : "");
     if ($("control-note").textContent !== status) $("control-note").textContent = status;
+    return stationInWindow || referenceInWindow;
   }
+  const description = $("chart-description");
   $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
@@ -451,26 +460,30 @@ function renderChart() {
       },
     });
     $("chart").setAttribute("aria-label", emptyMessage.replace("\n", " "));
-    $("chart-description").textContent = seasonal
-      ? "Completed daily intervals build this view. Partial seasons and missing days are not extrapolated."
-      : "";
+    description.hidden = true;
     return;
   }
   const unit = units()[state.metric];
   const seriesMeta = new Map();
-  let min = Infinity, max = -Infinity;
   const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
     seriesMeta.set(name, {rows: dataRows, key});
-    let points = 0;
+    const line = state.metric !== "rain";
+    const allSymbols = seasonal || state.period === "day";
+    let hasIsolatedPoints = false;
     const data = dataRows.map((row, index) => {
-      const value = convert(row[key]);
-      if (numeric(value)) { points++; min = Math.min(min, value); max = Math.max(max, value); }
-      return [seasonal ? index : Date.parse(row.at), value];
+      const value = [seasonal ? index : Date.parse(row.at), convert(row[key])];
+      if (line && !allSymbols && numeric(value[1]) &&
+          !numeric(dataRows[index - 1]?.[key]) && !numeric(dataRows[index + 1]?.[key])) {
+        hasIsolatedPoints = true;
+        return {value, symbol: "circle"};
+      }
+      return value;
     });
     return {
       name,
-      type: state.metric === "rain" ? "bar" : "line",
-      showSymbol: seasonal || state.period === "day" || points === 1,
+      type: line ? "line" : "bar",
+      showSymbol: allSymbols || hasIsolatedPoints,
+      symbol: allSymbols ? undefined : "none",
       symbolSize: 4,
       connectNulls: false,
       data,
@@ -481,27 +494,8 @@ function renderChart() {
     };
   };
   // Temperature hue encodes high/low; line pattern identifies the source.
-  const series = stationHasData ? [
-    makeSeries(comparisons.length ? `${stationName} · ${state.metric === "temperature" ? "mean" : label.toLowerCase()}` : state.metric === "temperature" ? "Mean temperature" : label, field, comparisons.length ? "#e4b17b" : color),
-  ] : [];
-  if (state.metric === "temperature" &&
-      rows.some((row) => numeric(row.temperature_min_c) || numeric(row.temperature_max_c))) {
-    for (const [suffix, key, seriesColor] of [
-      ["low", "temperature_min_c", "#7fc9e4"],
-      ["high", "temperature_max_c", "#edb46f"],
-    ]) {
-      const prefix = comparisons.length ? `${stationName} · ` : "";
-      series.push(makeSeries(`${prefix}${resolution} ${suffix}`, key, seriesColor, {
-        lineStyle: {width: 1.5, type: "solid", color: seriesColor},
-      }));
-    }
-  }
-  if (state.metric === "wind" && stationHasData)
-    series.push(
-      makeSeries("Peak gust", "wind_gust_m_s", "#d7c7a4", {
-        lineStyle: { width: 1, type: "dashed", color: "#d7c7a4" },
-      }),
-    );
+  const series = plottedFields.map(([key, name, tint, width = 2, type = "solid"]) =>
+    makeSeries(name, key, tint, {lineStyle: {color: tint, width, type}}));
   for (const item of comparisons) {
     const {name, color, high, low, line} = referenceSources[item.source.id];
     for (const key of referenceFields) {
@@ -526,8 +520,7 @@ function renderChart() {
   timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), daily};
   const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : timelineRange(timelineDomain, days, state.viewport);
   renderWindow = (view) => {
-    describeCoverage(view);
-    const readings = series.some((item) => item.data.some(([at, value]) => at >= view.from && at <= view.to && numeric(value)));
+    const readings = describeCoverage(view);
     const format = daily ? dateFormat : timeFormat;
     const dates = format.formatRange(new Date(view.from), new Date(view.to));
     const summary = `Showing ${dates}${readings ? "" : " · No readings in this window"}`;
@@ -543,6 +536,13 @@ function renderChart() {
     renderWindow(visibleWindow(timelineDomain, zoom));
   }
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const seasonLabel = (row) => {
+    if (comparisons.length) return row.label;
+    const days = plottedFields.map(([key]) => row.coverage[key] ?? 0);
+    const status = days.every((count) => count === 0) ? "\n(no data)"
+      : days.some((count) => count < row.expectedDays) ? "\n(partial)" : "";
+    return row.label + status;
+  };
   chart.setOption(
     {
       backgroundColor: "transparent",
@@ -596,9 +596,7 @@ function renderChart() {
         type: seasonal ? "category" : "time",
         min: seasonal ? undefined : timelineDomain.start,
         max: seasonal ? undefined : end,
-        ...(seasonal ? { data: rows.map((row) => row.label +
-          (comparisons.length ? "" : !row.coverage[field] ? "\n(no data)" : row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
-        boundaryGap: state.metric === "rain",
+        ...(seasonal ? { data: rows.map(seasonLabel) } : {}),
         axisLine: { lineStyle: { color: "#35433e" } },
         axisTick: { show: false },
         splitLine: { show: false },
@@ -650,20 +648,18 @@ function renderChart() {
     true,
   );
   chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
-  const range = min <= max
-    ? `Available values span ${min.toFixed(1)} to ${max.toFixed(1)} ${unit}.`
-    : "No recorded values in this period.";
-  $("chart-description").textContent = seasonal
-    ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
-    : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" ? `${stationHasData ? "mean temperature, with " : "temperature "}minimum and maximum` : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
-  if (comparisons.length)
-    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationHasData ? "" : ` ${state.showStation ? "No local daily values are available in this view yet" : "Station observations are hidden"}; only the selected controls are shown.`}`;
-  if (state.metric === "solar")
-    $("chart-description").textContent += " Solar means include nighttime readings. Sun angle, day length, shading, smoke, and clouds affect this light-derived estimate; it is not cloud-cover percentage.";
-  $("chart").setAttribute(
-    "aria-label",
-    `${state.showStation ? stationName + (comparisons.length ? " and reference" : "") : "Reference history"} ${label.toLowerCase()} chart. ${range}`,
-  );
+  const notes = [];
+  if (seasonal) notes.push("Summaries use reported days. Hover or tap to see coverage.");
+  if (state.metric === "rain" && referenceHasData)
+    notes.push("Reference precipitation can include melted snow.");
+  if (state.metric === "solar") notes.push("Solar averages include nighttime readings.");
+  description.textContent = notes.join(" ");
+  description.hidden = !notes.length;
+  const sources = stationHasData
+    ? stationName + (referenceHasData ? " and selected references" : "")
+    : "selected references";
+  const measurement = state.metric === "temperature" ? "temperature lows and highs" : label.toLowerCase();
+  $("chart").setAttribute("aria-label", `${resolution} ${measurement} chart for ${sources}`);
 }
 async function load({ refresh = false } = {}) {
   const id = ++requestId;
@@ -671,14 +667,19 @@ async function load({ refresh = false } = {}) {
     state.mode === "sample"
       ? new URL("./data/sample/", location.href).href
       : settings.feed;
+  state.loading = true;
   if (!refresh) {
     state.current = null;
     state.history = null;
+    renderCurrent();
+    renderChart();
+    selected("mode", state.mode);
+    notice(
+      state.mode === "sample"
+        ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
+        : "Connecting to the station feed…",
+    );
   }
-  state.loading = true;
-  renderCurrent();
-  renderChart();
-  selected("mode", state.mode);
   if (!source) {
     state.loading = false;
     notice(
@@ -692,11 +693,6 @@ async function load({ refresh = false } = {}) {
   }
   $("json-link").href = `${source}current.json`;
   $("json-link").hidden = false;
-  notice(
-    state.mode === "sample"
-      ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
-      : "Connecting to the station feed…",
-  );
   const signal = AbortSignal.timeout(15000);
   const [current, history] = await Promise.allSettled([
     readJSON(`${source}current.json`, signal).then(validCurrent),
