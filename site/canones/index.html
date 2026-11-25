@@ -40,8 +40,8 @@
     "name": "{{ station.name_json }}, Cañones, New Mexico",
     "geo": {
       "@type": "GeoCoordinates",
-      "latitude": 36.150028,
-      "longitude": -106.4455
+      "latitude": {{ station.latitude }},
+      "longitude": {{ station.longitude }}
     }
   },
   "variableMeasured": [
@@ -286,7 +286,7 @@
           </div>
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
-            <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
+            {{ station_option }}
             <fieldset class="reference-sources" id="reference-sources" aria-describedby="reference-eligibility control-note" disabled>
               <legend>Reference history</legend>
               <p id="reference-eligibility" class="small">Dimmed sources are unavailable for the selected metric or time scale.</p>
@@ -311,7 +311,7 @@
                 <dt>Location</dt>
                 <dd>
                   <a
-                    href="https://www.openstreetmap.org/?mlat=36.150028&amp;mlon=-106.445500#map=15/36.150028/-106.445500"
+                    href="{{ station.map_url }}"
                     aria-label="View {{ station.name }} station on OpenStreetMap"
                     >{{ station.name }}, New Mexico ↗</a
                   >

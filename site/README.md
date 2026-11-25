@@ -100,7 +100,9 @@ New Mexico, Coastal, and Places of Excellence in Sample or Live mode.
 The chart starts with station observations. Daily and seasonal views offer
 temperature, precipitation, wind, and humidity references where available.
 Selections persist in other views. Hide station observations for a reference-only
-chart. Use the map pin beside a reference to open its station map. The
+chart. The picker swatches match each source's chart color and dash pattern.
+Temperature highs use a heavier line and lows use a lighter line in the same
+color. Each source's map pin opens its station location. The
 [reference guide](../docs/reference-data.md#station-locations) includes provider details.
 
 Reference sources are labeled separately and never fill station gaps. Sample

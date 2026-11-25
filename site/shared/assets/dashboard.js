@@ -35,18 +35,15 @@ function renderClock() {
 renderClock();
 setInterval(renderClock, 1000);
 const chart = window.echarts.init($("chart"), null, { renderer: "svg" });
-const referenceSources = {
-  abiquiu: {color: "#86b4cb", high: "#d9a4bd", low: "#76cbb6", line: "dotted"},
-  albuquerque: {color: "#dba0b7", high: "#e8cb70", low: "#7ea8e8", line: [8, 3, 2, 3]},
-  "santa-fe": {color: "#cbab8a", high: "#f6a285", low: "#8cd6c6", line: [12, 5]},
-  "gila-hot-springs": {color: "#9db47d", high: "#d5a95e", low: "#91bfb3", line: [2, 3, 8, 3]},
-  charleston: {color: "#d6ae9a", high: "#f78979", low: "#9caee7", line: "dashed"},
-  crozier: {color: "#d7c58f", high: "#e3a78f", low: "#7cbbdc", line: [10, 3, 2, 3]},
-  bodega: {color: "#96beb4", high: "#efc990", low: "#71cbc5", line: [4, 3, 1, 3]},
-  milwaukee: {color: "#a1a9d2", high: "#e2a681", low: "#9ac4ee", line: [3, 3, 9, 3]},
-  soller: {color: "#bfacd7", high: "#e094ad", low: "#afb8e7", line: [6, 5]},
-};
+function sourceStyle(input) {
+  const {color, pattern} = input.closest(".reference-option").dataset;
+  return {color, pattern: pattern ? pattern.split(" ").map(Number) : "solid"};
+}
+const stationInput = $("show-station-history");
+const stationStyle = sourceStyle(stationInput);
 const referenceInputs = [...document.querySelectorAll("[data-control]")];
+const referenceSources = Object.fromEntries(referenceInputs.map((input) =>
+  [input.dataset.control, {name: input.dataset.name, ...sourceStyle(input)}]));
 const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
 const minute = HOUR / 60;
 const state = {
@@ -143,11 +140,11 @@ const units = () => ({
 });
 
 const metrics = {
-  temperature: {label: "Temperature", field: "temperature_c", color: "#e4b17b", convert: temp},
-  humidity: {label: "Relative humidity", field: "humidity_pct", color: "#9fbfd1"},
-  wind: {label: "Average wind speed", field: "wind_speed_m_s", color: "#a1c6ac", convert: speed},
-  rain: {label: "Rainfall", field: "rain_mm", color: "#9fbfd1", convert: rain},
-  solar: {label: "Solar irradiance", field: "solar_w_m2", color: "#d7c7a4"},
+  temperature: {label: "Temperature", field: "temperature_c", convert: temp},
+  humidity: {label: "Relative humidity", field: "humidity_pct"},
+  wind: {label: "Average wind speed", field: "wind_speed_m_s", convert: speed},
+  rain: {label: "Rainfall", field: "rain_mm", convert: rain},
+  solar: {label: "Solar irradiance", field: "solar_w_m2"},
 };
 
 function validEnvelope(data) {
@@ -367,11 +364,11 @@ function renderChart() {
     return seasonal ? seasonalRows(selectedRows, state.period === "monsoon", settings.station.timezone) : selectedRows;
   };
   let rows = state.showStation ? selectRows(history) : [];
-  const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
+  const {label, field, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : settings.station.name;
   const stationSubtitle = state.showStation
-    ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
-    : "Station observations hidden · Mountain Time";
+    ? `${stationName} history · Mountain Time`
+    : `${stationName} hidden · Mountain Time`;
   $("history-resolution").textContent = `${resolution} summaries`;
   const canCompare = daily || seasonal;
   $("reference-sources").disabled = !canCompare;
@@ -393,8 +390,9 @@ function renderChart() {
     ? "Chart source settings ↓" : "Daily references · expand beyond 24h ↓";
   const selectedReferences = showReferences
     ? activeControls.map((key) => state.references[key]).filter(Boolean) : [];
-  const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
-  const hasReferenceValue = (row) => referenceFields.some((key) => numeric(row[key]));
+  const temperatureFields = [["temperature_max_c", "high"], ["temperature_min_c", "low"]];
+  const referenceFields = state.metric === "temperature" ? temperatureFields : [[field, state.metric === "rain" ? "precipitation" : label.toLowerCase()]];
+  const hasReferenceValue = (row) => referenceFields.some(([key]) => numeric(row[key]));
   const comparisons = selectedReferences.filter((data) => data.daily.some(hasReferenceValue)).map((data) => ({
     source: data.source,
     rows: selectRows(data),
@@ -430,13 +428,8 @@ function renderChart() {
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(new Date(endpoints[0].at))} – ${dateFormat.format(new Date(endpoints.at(-1).at))}`;
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
-  const stationPrefix = referenceHasData ? `${stationName} · ` : "";
-  const temperaturePrefix = stationPrefix || `${resolution} `;
-  const stationFields = state.metric === "temperature" ? [
-    ["temperature_min_c", `${temperaturePrefix}low`, "#7fc9e4", 1.5],
-    ["temperature_max_c", `${temperaturePrefix}high`, "#edb46f", 1.5],
-  ] : [[field, stationPrefix ? stationPrefix + label.toLowerCase() : label, color]];
-  if (state.metric === "wind") stationFields.push(["wind_gust_m_s", "Peak gust", "#d7c7a4", 1, "dashed"]);
+  const stationFields = state.metric === "temperature" ? temperatureFields : [[field, label.toLowerCase()]];
+  if (state.metric === "wind") stationFields.push(["wind_gust_m_s", "peak gust"]);
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
   const stationHasData = plottedFields.length > 0;
   function describeCoverage(view) {
@@ -445,8 +438,8 @@ function renderChart() {
     const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
       inWindow(row) && hasReferenceValue(row)));
     const subtitle = !referenceInWindow ? stationSubtitle : stationInWindow
-      ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
-      : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
+      ? `${stationName} + reference history · Mountain Time`
+      : `Reference history only · ${state.showStation ? `${stationName} has no readings in this window` : `${stationName} hidden`} · Mountain Time`;
     if ($("history-subtitle").textContent !== subtitle) $("history-subtitle").textContent = subtitle;
     const status = controlNote + (comparisons.length && !referenceInWindow
       ? " · No reference observations in this window" : "");
@@ -458,7 +451,7 @@ function renderChart() {
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
     const selectionPrompt = canCompare && hasEligibleSource
-      ? "Choose observations or\nreference history to display." : "Enable station observations to display history.";
+      ? "Choose observations or\nreference history to display." : `Show ${stationName} to display history.`;
     const emptyMessage = !state.showStation && !showReferences ? selectionPrompt
       : state.loading ? "Loading history…"
       : state.metric === "solar" ? "No solar observations in this period." : seasonal ? "Seasonal comparisons need daily history." : "No observations in this period.";
@@ -478,9 +471,14 @@ function renderChart() {
   }
   const unit = units()[state.metric];
   const seriesMeta = new Map();
-  const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
+  const makeSeries = (name, key, {color, pattern}, dataRows = rows) => {
     seriesMeta.set(name, {rows: dataRows, key});
     const line = state.metric !== "rain";
+    const low = key === "temperature_min_c";
+    const gust = key === "wind_gust_m_s";
+    const secondary = low || gust;
+    const marker = low ? "emptyCircle" : "circle";
+    const opacity = secondary ? .72 : 1;
     const allSymbols = seasonal || state.period === "day";
     let hasIsolatedPoints = false;
     const data = dataRows.map((row, index) => {
@@ -488,7 +486,7 @@ function renderChart() {
       if (line && !allSymbols && numeric(value[1]) &&
           !numeric(dataRows[index - 1]?.[key]) && !numeric(dataRows[index + 1]?.[key])) {
         hasIsolatedPoints = true;
-        return {value, symbol: "circle"};
+        return {value, symbol: marker};
       }
       return value;
     });
@@ -496,37 +494,29 @@ function renderChart() {
       name,
       type: line ? "line" : "bar",
       showSymbol: allSymbols || hasIsolatedPoints,
-      symbol: allSymbols ? undefined : "none",
+      symbol: allSymbols ? marker : "none",
       symbolSize: 4,
       connectNulls: false,
       data,
-      itemStyle: { color },
-      lineStyle: { color, width: 2 },
+      itemStyle: {color, opacity},
+      lineStyle: {color, opacity, width: secondary ? 1.5 : 2.25, type: gust ? [4, 3] : pattern},
       emphasis: { focus: "series" },
-      ...extra,
     };
   };
-  // Temperature hue encodes high/low; line pattern identifies the source.
-  const series = plottedFields.map(([key, name, tint, width = 2, type = "solid"]) =>
-    makeSeries(name, key, tint, {lineStyle: {color: tint, width, type}}));
+  // Color and dash pattern identify the source. Stroke weight and markers distinguish highs and lows.
+  const series = plottedFields.map(([key, suffix]) => makeSeries(`${stationName} · ${suffix}`, key, stationStyle));
   for (const item of comparisons) {
-    const {name, color, high, low, line} = referenceSources[item.source.id];
-    for (const key of referenceFields) {
+    const source = referenceSources[item.source.id];
+    for (const [key, suffix] of referenceFields) {
       if (!item.rows.some((row) => numeric(row[key]))) continue;
-      const suffix = key === "temperature_min_c" ? "low" : key === "temperature_max_c" ? "high"
-        : state.metric === "rain" ? "precipitation" : label.toLowerCase();
-      const seriesColor = state.metric === "temperature"
-        ? (suffix === "low" ? low : high) : color;
-      series.push(makeSeries(`${name} · ${suffix}`, key, seriesColor, {
-        lineStyle: {color: seriesColor, width: 1.5, type: line},
-      }, item.rows));
+      series.push(makeSeries(`${source.name} · ${suffix}`, key, source, item.rows));
     }
   }
   if (comparisons.length && stationHasData && !seasonal && timestamp(history?.record_started_at)) {
     series[0].markLine = {
-      symbol: "none", lineStyle: {color: "#e4b17b", type: "dashed"},
+      symbol: "none", lineStyle: {color: stationStyle.color, type: "dashed"},
       data: [{xAxis: Date.parse(history.record_started_at), name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
-      label: {formatter: "{b}", color: "#e4b17b", position: "insideEndTop"},
+      label: {formatter: "{b}", color: stationStyle.color, position: "insideEndTop"},
     };
   }
   // Keep the selected dates when switching between hourly and daily records.
@@ -576,6 +566,7 @@ function renderChart() {
       legend: {
         left: 50, // Leave room for the y-axis unit.
         type: "scroll",
+        itemWidth: 31,
         pageTextStyle: {color: "#a1b0ab"},
         show: series.length > 1,
         top: 0,
@@ -591,7 +582,7 @@ function renderChart() {
           const date = new Date(entries[0].value[0]);
           const title = seasonal ? rows[entries[0].value[0]].label
             : daily ? dateFormat.format(date) : `Hour starting ${timeFormat.format(date)}`;
-          const ordered = [...entries].sort((a, b) => {
+          const ordered = state.metric === "temperature" ? entries : [...entries].sort((a, b) => {
             const aValue = a.value[1], bValue = b.value[1];
             return numeric(aValue) && numeric(bValue) ? bValue - aValue
               : Number(numeric(bValue)) - Number(numeric(aValue));
@@ -784,15 +775,13 @@ async function loadReference(key) {
   }
   renderChart();
 }
-$("show-station-history").addEventListener("change", (event) => {
+stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
   if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
   renderChart();
 });
 for (const input of referenceInputs) {
   const key = input.dataset.control;
-  referenceSources[key].name = input.dataset.name;
-  input.style.accentColor = referenceSources[key].color;
   input.addEventListener("change", () => {
     if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
     if (state.controlErrors.has(key) || Date.now() - state.referenceCheckedAt[key] >= 3600000)

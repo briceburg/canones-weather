@@ -8,6 +8,20 @@ from html import escape
 from canones_weather.reference import STATIONS
 from canones_weather.station import load_station
 
+STATION_LOCATION = (36.150028, -106.4455)
+SOURCE_STYLES = {
+    "canones": ("#e4b17b", ()),
+    "abiquiu": ("#66bfdc", (2, 4)),
+    "santa-fe": ("#8ca4ff", (14, 5)),
+    "albuquerque": ("#c3a3f8", (9, 4, 2, 4)),
+    "gila-hot-springs": ("#b9d878", (2, 3, 2, 7)),
+    "bodega": ("#5ad4b1", (7, 5)),
+    "soller": ("#ed9bd1", (13, 4, 5, 4)),
+    "charleston": ("#fc9089", (4, 5, 4, 8)),
+    "crozier": ("#cad4e3", (17, 5, 2, 4, 2, 5)),
+    "milwaukee": ("#a6dfeb", (11, 4, 3, 4, 3, 5)),
+}
+
 REFERENCE_GROUPS = {
     "New Mexico": (
         ("abiquiu", "Abiquiu Dam", ""),
@@ -27,22 +41,49 @@ REFERENCE_GROUPS = {
 }
 
 
+def map_url(latitude, longitude, zoom=14):
+    return f"https://www.openstreetmap.org/?mlat={latitude}&mlon={longitude}#map={zoom}/{latitude}/{longitude}"
+
+
+def source_option(key, name, place, url, input_attributes):
+    color, dashes = SOURCE_STYLES[key]
+    swatch = color
+    if dashes:
+        stops = []
+        offset = 0
+        for index, length in enumerate(dashes):
+            fill = "transparent" if index % 2 else color
+            stops.append(f"{fill} {offset}px {offset + length}px")
+            offset += length
+        swatch = f"repeating-linear-gradient(90deg, {', '.join(stops)})"
+    pattern = " ".join(map(str, dashes))
+    name = escape(name)
+    hint = f'<span class="muted">{escape(place)}</span>' if place else ""
+    return (
+        f'<span class="reference-option" data-color="{color}" data-pattern="{pattern}" '
+        f'style="--source-color: {color}; --source-swatch: {swatch}">'
+        f'<label><input type="checkbox" {input_attributes} />'
+        f'<span class="source-swatch" aria-hidden="true"></span><span>{name}{hint}</span></label>'
+        f'<a href="{escape(url)}" aria-label="Map of {name} (opens in a new tab)" '
+        'target="_blank" rel="noopener">📍</a></span>'
+    )
+
+
 def reference_groups():
     groups = []
     for title, options in REFERENCE_GROUPS.items():
         groups.append(f'<fieldset class="reference-group"><legend>{escape(title)}</legend>')
         for key, name, place in options:
             reference = STATIONS[key]
-            lat, lon = reference["latitude"], reference["longitude"]
-            url = f"https://www.openstreetmap.org/?mlat={lat}&amp;mlon={lon}#map=14/{lat}/{lon}"
-            name = escape(name)
-            hint = f'<span class="muted">{escape(place)}</span>' if place else ""
             metrics = " ".join(("temperature", "rain", *reference.get("additional_metrics", ())))
             groups.append(
-                f'<span class="reference-option"><label><input type="checkbox" data-control="{key}" '
-                f'data-name="{name}" data-metrics="{metrics}" /> '
-                f'<span>{name}{hint}</span></label><a href="{url}" '
-                f'aria-label="Map of {name} (opens in a new tab)" target="_blank" rel="noopener">📍</a></span>'
+                source_option(
+                    key,
+                    name,
+                    place,
+                    map_url(reference["latitude"], reference["longitude"]),
+                    f'data-control="{key}" data-name="{escape(name)}" data-metrics="{metrics}"',
+                )
             )
         groups.append("</fieldset>")
     return "\n".join(groups)
@@ -55,6 +96,9 @@ def render_html(source, station):
         "name": escape(station["name"]),
         "name_json": name_json,
         "timezone": escape(station["timezone"]),
+        "latitude": str(STATION_LOCATION[0]),
+        "longitude": str(STATION_LOCATION[1]),
+        "map_url": escape(map_url(*STATION_LOCATION, zoom=15)),
     }
 
     return re.sub(r"\{\{ station\.(\w+) \}\}", lambda match: values[match[1]], source)
@@ -73,6 +117,14 @@ def build_site(repo_root, output_root):
         page = target / "index.html"
         html = render_html(page.read_text(encoding="utf-8"), station)
         if name == "canones":
+            local_source = source_option(
+                station["id"],
+                station["name"],
+                "",
+                map_url(*STATION_LOCATION, zoom=15),
+                'id="show-station-history" checked',
+            )
+            html = html.replace("{{ station_option }}", local_source)
             html = html.replace("{{ reference_groups }}", reference_groups())
         page.write_text(html, encoding="utf-8")
         config_path = target / "assets/site-config.json"
