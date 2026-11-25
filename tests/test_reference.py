@@ -19,10 +19,11 @@ def test_noaa_excludes_failed_quality_and_presumed_zero_but_retains_trace():
         [
             line("TMAX", [(1, 125, " ", " "), (2, 333, " ", "X")]),
             line("PRCP", [(1, 25, " ", " "), (3, 0, "P", " "), (4, 0, "T", " ")]),
+            line("AWND", [(1, 42, " ", " "), (2, 66, " ", "X")]),
         ]
     )
-    rows = noaa_rows(text, date(2024, 2, 1), date(2024, 2, 29))
-    assert rows[date(2024, 2, 1)] == {"temperature_max_c": 12.5, "rain_mm": 2.5}
+    rows = noaa_rows(text, date(2024, 2, 1), date(2024, 2, 29), include_wind=True)
+    assert rows[date(2024, 2, 1)] == {"temperature_max_c": 12.5, "rain_mm": 2.5, "wind_speed_m_s": 4.2}
     assert date(2024, 2, 2) not in rows
     assert date(2024, 2, 3) not in rows
     assert rows[date(2024, 2, 4)] == {"rain_mm": 0.0, "precipitation_trace": True}
@@ -87,12 +88,12 @@ def test_reference_day_preserves_precipitation_when_temperature_is_missing():
 
 
 def test_uscrn_uses_native_daily_units_and_leaves_missing_fields_empty():
-    text = """93245 20261119 2.622 -123.07 38.32 -9999.0 6.5 -9999.0 -9999.0 1.2
-93245 20261120 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 -9999.0
+    text = """93245 20261119 2.622 -123.07 38.32 -9999.0 6.5 -9999.0 -9999.0 1.2 8.64 R 12.1 6.2 9.2 80.0 60.0 70.2
+93245 20261120 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 -9999.0 -9999.0 R 14.0 7.2 10.2 -9999.0 -9999.0 -9999.0
 """
     rows = reference.uscrn_rows(text, "USW00093245", 2026)
     assert rows == {
-        date(2026, 11, 19): {"temperature_min_c": 6.5, "rain_mm": 1.2},
+        date(2026, 11, 19): {"temperature_min_c": 6.5, "rain_mm": 1.2, "solar_w_m2": 100, "humidity_pct": 70.2},
         date(2026, 11, 20): {"temperature_min_c": 7.8, "temperature_max_c": 14.9},
     }
     with pytest.raises(ValueError, match="station"):
@@ -104,12 +105,12 @@ def test_uscrn_uses_native_daily_units_and_leaves_missing_fields_empty():
 def test_aemet_parses_trace_and_skips_multiday_precipitation():
     first, last = date(2026, 11, 19), date(2026, 11, 20)
     records = [
-        {"fecha": first.isoformat(), "indicativo": "B051A", "tmin": "7,8", "prec": "Ip"},
-        {"fecha": last.isoformat(), "indicativo": "B051A", "tmax": "14,9", "prec": "Acum"},
+        {"fecha": first.isoformat(), "indicativo": "B051A", "tmin": "7,8", "prec": "Ip", "hrMedia": "89"},
+        {"fecha": last.isoformat(), "indicativo": "B051A", "tmax": "14,9", "prec": "Acum", "velmedia": "3,4"},
     ]
     assert reference.aemet_rows(records, "B051A", first, last) == {
-        first: {"temperature_min_c": 7.8, "rain_mm": 0.0, "precipitation_trace": True},
-        last: {"temperature_max_c": 14.9},
+        first: {"temperature_min_c": 7.8, "rain_mm": 0.0, "precipitation_trace": True, "humidity_pct": 89},
+        last: {"temperature_max_c": 14.9, "wind_speed_m_s": 3.4},
     }
     with pytest.raises(ValueError, match="reporting calendar"):
         reference.aemet_rows([*records, records[-1]], "B051A", first, last)

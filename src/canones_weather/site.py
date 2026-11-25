@@ -37,9 +37,11 @@ def reference_groups():
             url = f"https://www.openstreetmap.org/?mlat={lat}&amp;mlon={lon}#map=14/{lat}/{lon}"
             name = escape(name)
             hint = f'<span class="muted">{escape(place)}</span>' if place else ""
+            metrics = " ".join(("temperature", "rain", *reference.get("additional_metrics", ())))
             groups.append(
-                f'<span class="reference-option"><label><input type="checkbox" data-control="{key}" data-name="{name}" /> '
-                f'<span>{name}{hint}</span></label><a href="{url}" '
+                f'<span class="reference-option"><label><input type="checkbox" data-control="{key}" '
+                f'data-name="{name}" data-metrics="{metrics}" /> '
+                f'<span>{name}{hint}<small class="muted" data-unavailable hidden></small></span></label><a href="{url}" '
                 f'aria-label="Map of {name} (opens in a new tab)" target="_blank" rel="noopener">📍</a></span>'
             )
         groups.append("</fieldset>")

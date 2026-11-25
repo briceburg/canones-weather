@@ -46,6 +46,7 @@ const referenceSources = {
   milwaukee: {color: "#a1a9d2", high: "#e2a681", low: "#9ac4ee", line: [3, 3, 9, 3]},
   soller: {color: "#bfacd7", high: "#e094ad", low: "#afb8e7", line: [6, 5]},
 };
+const referenceInputs = [...document.querySelectorAll("[data-control]")];
 const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
 const minute = HOUR / 60;
 const state = {
@@ -144,7 +145,7 @@ const units = () => ({
 const metrics = {
   temperature: {label: "Temperature", field: "temperature_c", color: "#e4b17b", convert: temp},
   humidity: {label: "Relative humidity", field: "humidity_pct", color: "#9fbfd1"},
-  wind: {label: "Wind speed", field: "wind_speed_m_s", color: "#a1c6ac", convert: speed},
+  wind: {label: "Average wind speed", field: "wind_speed_m_s", color: "#a1c6ac", convert: speed},
   rain: {label: "Rainfall", field: "rain_mm", color: "#9fbfd1", convert: rain},
   solar: {label: "Solar irradiance", field: "solar_w_m2", color: "#d7c7a4"},
 };
@@ -232,8 +233,11 @@ function validReference(data, key) {
     previous = Date.parse(row.at);
     for (const field of ["temperature_min_c", "temperature_max_c", "rain_mm"])
       if (row[field] !== null && !numeric(row[field])) throw new Error("Invalid reference value");
+    for (const field of ["humidity_pct", "wind_speed_m_s", "solar_w_m2"])
+      if (row[field] != null && (!numeric(row[field]) || row[field] < 0))
+        throw new Error("Invalid reference value");
     if (numeric(row.rain_mm) && row.rain_mm < 0 || numeric(row.temperature_min_c) &&
-        numeric(row.temperature_max_c) && row.temperature_min_c > row.temperature_max_c)
+        numeric(row.temperature_max_c) && row.temperature_min_c > row.temperature_max_c || row.humidity_pct > 100)
       throw new Error("Invalid reference range");
   }
   return data;
@@ -369,26 +373,33 @@ function renderChart() {
     ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
     : "Station observations hidden · Mountain Time";
   $("history-resolution").textContent = `${resolution} summaries`;
-  const referenceMetric = ["temperature", "rain"].includes(state.metric);
-  const eligible = (daily || seasonal) && referenceMetric;
-  $("reference-sources").disabled = !eligible;
-  const activeControls = eligible ? [...state.controls] : [];
+  const canCompare = daily || seasonal;
+  $("reference-sources").disabled = !canCompare;
+  const activeControls = [];
+  for (const input of referenceInputs) {
+    const key = input.dataset.control;
+    input.disabled = canCompare && !input.dataset.metrics.split(" ").includes(state.metric);
+    input.checked = !input.disabled && state.controls.has(key);
+    const hint = input.parentElement.querySelector("[data-unavailable]");
+    hint.hidden = !input.disabled;
+    if (input.disabled) hint.textContent = ` · No ${state.metric} data`;
+    if (canCompare && input.checked) activeControls.push(key);
+  }
   const showReferences = activeControls.length > 0;
   if (showReferences)
     for (const key of activeControls)
       if (!state.referenceCheckedAt[key]) loadReference(key);
-  $("reference-summary").textContent = referenceMetric && !eligible
-    ? "Daily references · expand beyond 24h ↓" : "Chart source settings ↓";
+  $("reference-summary").textContent = canCompare
+    ? "Chart source settings ↓" : "Daily references · expand beyond 24h ↓";
   const selectedReferences = showReferences
     ? activeControls.map((key) => state.references[key]).filter(Boolean) : [];
-  const comparisons = selectedReferences.map((data) => ({
+  const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
+  const hasReferenceValue = (row) => referenceFields.some((key) => numeric(row[key]));
+  const comparisons = selectedReferences.filter((data) => data.daily.some(hasReferenceValue)).map((data) => ({
     source: data.source,
     rows: selectRows(data),
   }));
-  const referenceFields = state.metric === "temperature" ? ["temperature_min_c", "temperature_max_c"] : [field];
-  const hasReferenceValue = (row) => referenceFields.some((key) => numeric(row[key]));
-  const controlNote = !referenceMetric ? "Choose Temperature or Rain to compare references."
-    : !eligible ? "Widen past 24h or choose 30d to compare daily references."
+  const controlNote = !canCompare ? "Widen past 24h or choose 30d to compare daily references."
     : !showReferences ? "Select sources to compare regional weather."
     : activeControls.map((key) => {
       const {name} = referenceSources[key];
@@ -493,7 +504,8 @@ function renderChart() {
     const {name, color, high, low, line} = referenceSources[item.source.id];
     for (const key of referenceFields) {
       if (!item.rows.some((row) => numeric(row[key]))) continue;
-      const suffix = key === "temperature_min_c" ? "low" : key === "temperature_max_c" ? "high" : "precipitation";
+      const suffix = key === "temperature_min_c" ? "low" : key === "temperature_max_c" ? "high"
+        : state.metric === "rain" ? "precipitation" : label.toLowerCase();
       const seriesColor = state.metric === "temperature"
         ? (suffix === "low" ? low : high) : color;
       series.push(makeSeries(`${name} · ${suffix}`, key, seriesColor, {
@@ -762,7 +774,7 @@ $("show-station-history").addEventListener("change", (event) => {
   if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
   renderChart();
 });
-for (const input of document.querySelectorAll("[data-control]")) {
+for (const input of referenceInputs) {
   const key = input.dataset.control;
   referenceSources[key].name = input.dataset.name;
   input.style.accentColor = referenceSources[key].color;
@@ -780,7 +792,10 @@ new ResizeObserver(() => chart.resize()).observe($("chart"));
 setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
-  for (const key of state.controls)
-    if (Date.now() - state.referenceCheckedAt[key] >= 3600000) loadReference(key);
+  for (const input of referenceInputs) {
+    const key = input.dataset.control;
+    if (input.checked && !input.matches(":disabled") && Date.now() - state.referenceCheckedAt[key] >= 3600000)
+      loadReference(key);
+  }
 }, 300000);
 await load();

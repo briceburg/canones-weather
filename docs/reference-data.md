@@ -3,12 +3,11 @@
 Reference history compares weather across locations: for example, Albuquerque's
 monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
-Select references in the dashboard to compare daily temperature and precipitation
-in 30d, 1y, 3y, All, Seasons, or Monsoon. You can also widen the 24h timeline past
-24 hours to switch to daily summaries and show the selected references. The
-dashboard disables reference selection in hourly history and for measurements
-other than temperature and precipitation, and remembers your selections. Current
-conditions show the local station's observations.
+Select references in the dashboard to compare daily measurements in 30d, 1y, 3y,
+All, Seasons, or Monsoon. You can also widen the 24h timeline past 24 hours to
+show daily summaries. The dashboard marks references that lack the selected
+measurement, disables selection in hourly history, and remembers your selections.
+Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
 commissioning date. Sample mode ends at its fixed fixture timestamp. Use Live
@@ -53,11 +52,22 @@ gaps within its record and at the most recent dates.
 
 ## Variables and boundaries
 
-References contain daily minimum/maximum temperature in degrees Celsius and daily
-precipitation in millimetres. The reference feeds supply highs and lows for
-temperature comparisons. Wind, humidity, and solar controls are unavailable.
-Reference precipitation includes snow water
-equivalent, which is different from the WS90's rainfall measurement.
+All references supply daily temperature highs and lows in degrees Celsius and
+precipitation in millimetres. Reference precipitation can include snow water
+equivalent.
+
+| Additional daily metric | Reference stations | Provider fields |
+| --- | --- | --- |
+| Average wind speed (m/s) | Albuquerque, Santa Fe, Downtown Charleston, Milwaukee, Port de Sóller | NOAA GHCN-Daily `AWND`, AEMET `velmedia` |
+| Average relative humidity (%) | Bodega Marine, Port de Sóller | NOAA USCRN `RH_DAILY_AVG`, AEMET `hrMedia` |
+| Average solar irradiance (W/m²) | Bodega Marine | NOAA USCRN `SOLARAD_DAILY` converted from daily energy over 24 hours |
+
+The peak gust series comes from Secco Spring. Wind exposure and sensor heights
+vary by site.
+
+[GHCN-Daily fields](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt),
+[USCRN daily01 fields](https://www.ncei.noaa.gov/pub/data/uscrn/products/daily01/README.txt),
+and [AEMET daily climatology fields](https://opendata.aemet.es/opendata/sh/b3aa9d28).
 
 Daily timestamps label the provider's reporting date in America/Denver. Crozier
 and Gila Hot Springs retain their cooperative observer reporting dates. Bodega
