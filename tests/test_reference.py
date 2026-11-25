@@ -114,7 +114,9 @@ def test_bodega_refresh_handles_the_local_year_rollover(monkeypatch, runner_day,
     def download(url):
         if "/2026/" in url:
             raise HTTPError(url, 404, "Not yet available", None, None)
-        return f"93245 202512{last_record} 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 0.0"
+        return (
+            f"93245 202512{last_record} 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 0.0 12.0 R 14.0 7.2 10.2 80.0 60.0 70.2"
+        )
 
     monkeypatch.setattr(reference, "datetime", RunnerTime)
     monkeypatch.setattr(reference, "download", download)
