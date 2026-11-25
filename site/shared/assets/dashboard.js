@@ -4,13 +4,13 @@ import { timelineRange } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Denver",
+  timeZone: settings.station.timezone,
   month: "short",
   day: "numeric",
   year: "numeric",
 });
 const timeFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Denver",
+  timeZone: settings.station.timezone,
   month: "short",
   day: "numeric",
   year: "numeric",
@@ -19,10 +19,10 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
   timeZoneName: "short",
 });
 const hourFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Denver", hour: "numeric",
+  timeZone: settings.station.timezone, hour: "numeric",
 });
 const clockFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Denver",
+  timeZone: settings.station.timezone,
   hour: "numeric", hour12: true, minute: "2-digit", second: "2-digit", timeZoneName: "short",
 });
 function renderClock() {
@@ -106,7 +106,7 @@ function validEnvelope(data) {
 function validCurrent(data) {
   validEnvelope(data);
   if (
-    data.station?.id !== "canones" ||
+    data.station?.id !== settings.station.id ||
     !timestamp(data.observed_at) ||
     !data.outdoor ||
     typeof data.outdoor.verified !== "boolean" ||
@@ -131,7 +131,7 @@ function validCurrent(data) {
 function validHistory(data) {
   validEnvelope(data);
   if (
-    data.station_id !== "canones" ||
+    data.station_id !== settings.station.id ||
     !timestamp(data.through) ||
     !Array.isArray(data.hourly) ||
     !Array.isArray(data.daily) ||
@@ -313,11 +313,11 @@ function renderChart() {
     const selectedRows = (data?.[daily || seasonal ? "daily" : recent ? "recent" : "hourly"] ?? []).filter(
       (row) => Date.parse(row.at) <= end && (daily || seasonal || Date.parse(row.at) > end - days * 86400000),
     );
-    return seasonal ? seasonalRows(selectedRows, state.period === "monsoon") : selectedRows;
+    return seasonal ? seasonalRows(selectedRows, state.period === "monsoon", settings.station.timezone) : selectedRows;
   };
   let rows = state.showStation ? selectRows(history) : [];
   const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
-  const stationName = state.mode === "sample" ? "Sample station" : "Secco Creek";
+  const stationName = state.mode === "sample" ? "Sample station" : settings.station.name;
   $("history-subtitle").textContent = state.showStation
     ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
     : "Station observations hidden · Mountain Time";

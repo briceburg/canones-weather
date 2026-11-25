@@ -12,6 +12,7 @@ import weewx.xtypes
 from weeutil.weeutil import TimeSpan, archiveDaySpan, intervalgen, startOfDay
 
 from canones_weather.jsonio import write_json
+from canones_weather.station import load_station
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ def history_rows(manager, start, stop, interval):
 
 
 def export(manager, record, output_root):
+    station = load_station()
     metric = weewx.units.to_std_system(record, weewx.METRICWX)
     timestamp = record["dateTime"]
     first = manager.first_timestamp
@@ -82,7 +84,7 @@ def export(manager, record, output_root):
         "deployment": deployment,
         "schema_version": 1,
         "kind": "live",
-        "station_id": "canones",
+        "station_id": station["id"],
         "through": iso(timestamp),
         "record_started_at": iso(first),
         "recent": recent,
@@ -112,7 +114,7 @@ def export(manager, record, output_root):
         "deployment": deployment,
         "schema_version": 1,
         "kind": "live",
-        "station": {"id": "canones", "name": "Secco Creek", "timezone": "America/Denver"},
+        "station": station,
         "observed_at": iso(timestamp),
         "outdoor": {
             "source": "GW3000 primary outdoor (unverified)",

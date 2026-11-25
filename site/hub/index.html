@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#101819" />
     <meta
       name="description"
-      content="Local weather, shared openly. Observations from Secco Creek in Cañones, New Mexico."
+      content="Local weather, shared openly. Observations from {{ station.name }} in Cañones, New Mexico."
     />
     <title>Iceburg Weather — Weather, close to home.</title>
     <link rel="canonical" href="https://weather.iceburg.net/" />
@@ -113,7 +113,7 @@
           <article class="station-card">
             <div class="station-copy">
               <p class="eyebrow">Cañones · New Mexico</p>
-              <h3>Secco Creek</h3>
+              <h3>{{ station.name }}</h3>
               <p class="muted">
                 Follow the weather through the day and the seasons, from a small
                 clearing in northern New Mexico.
@@ -136,7 +136,7 @@
               <a
                 class="station-map small"
                 href="https://www.openstreetmap.org/?mlat=36.150028&amp;mlon=-106.445500#map=15/36.150028/-106.445500"
-                aria-label="View Secco Creek station on OpenStreetMap"
+                aria-label="View {{ station.name }} station on OpenStreetMap"
                 >View on map ↗</a
               >
             </div>

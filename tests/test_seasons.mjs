@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { seasonalRows } from "../site/shared/assets/seasons.js";
+import { seasonalRows as summarize } from "../site/shared/assets/seasons.js";
+
+const seasonalRows = (daily, monsoon = false) => summarize(daily, monsoon, "America/Denver");
 
 const day = (at, temperature_c, rain_mm) => ({ at, temperature_c, rain_mm });
 
