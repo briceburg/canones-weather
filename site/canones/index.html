@@ -7,9 +7,9 @@
     <meta name="theme-color" content="#101819" />
     <meta
       name="description"
-      content="Weather at Secco Creek, Cañones, New Mexico. Explore current conditions and weather history."
+      content="Weather at {{ station.name }}, Cañones, New Mexico. Explore current conditions and weather history."
     />
-    <title>Secco Creek — Iceburg Weather</title>
+    <title>{{ station.name }} — Iceburg Weather</title>
     <link rel="canonical" href="https://canones.weather.iceburg.net/" />
     <link rel="icon" href="./assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./assets/styles.css" />
@@ -18,8 +18,8 @@
   "@context": "https://schema.org",
   "@type": "Dataset",
   "@id": "https://canones.weather.iceburg.net/#observations",
-  "name": "Secco Creek weather observations, Cañones, New Mexico",
-  "description": "Public local weather observations with timestamps, sensor provenance, and pilot notices. Historical NOAA observations and Daymet grid estimates are separate comparison datasets, not Secco Creek measurements.",
+  "name": "{{ station.name_json }} weather observations, Cañones, New Mexico",
+  "description": "Public local weather observations with timestamps, sensor provenance, and pilot notices. Historical NOAA observations and Daymet grid estimates are separate comparison datasets, not local station measurements.",
   "url": "https://canones.weather.iceburg.net/",
   "isAccessibleForFree": true,
   "creator": {
@@ -30,14 +30,14 @@
   "keywords": [
     "Canones",
     "Cañones",
-    "Secco Creek",
+    "{{ station.name_json }}",
     "New Mexico",
     "weather station",
     "weather observations"
   ],
   "spatialCoverage": {
     "@type": "Place",
-    "name": "Secco Creek, Cañones, New Mexico",
+    "name": "{{ station.name_json }}, Cañones, New Mexico",
     "geo": {
       "@type": "GeoCoordinates",
       "latitude": 36.150028,
@@ -104,7 +104,7 @@
         <section class="station-header" aria-labelledby="station-title">
           <div class="station-identity">
             <p class="eyebrow">Cañones · New Mexico</p>
-            <h1 id="station-title">Secco Creek</h1>
+            <h1 id="station-title">{{ station.name }}</h1>
             <p class="station-clock muted">
               <span class="station-time-group">
                 <span class="small">Station time:</span>
@@ -298,14 +298,14 @@
                 <dd>
                   <a
                     href="https://www.openstreetmap.org/?mlat=36.150028&amp;mlon=-106.445500#map=15/36.150028/-106.445500"
-                    aria-label="View Secco Creek station on OpenStreetMap"
-                    >Secco Creek, New Mexico ↗</a
+                    aria-label="View {{ station.name }} station on OpenStreetMap"
+                    >{{ station.name }}, New Mexico ↗</a
                   >
                 </dd>
               </div>
               <div>
                 <dt>Time zone</dt>
-                <dd>America/Denver</dd>
+                <dd>{{ station.timezone }}</dd>
               </div>
               <div>
                 <dt>Outdoor sensor</dt>

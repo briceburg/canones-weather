@@ -1,4 +1,4 @@
-# Secco Creek station
+# Secco Spring station
 
 | Setting | Value |
 | --- | --- |

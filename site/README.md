@@ -9,17 +9,19 @@ python3 -m http.server 8000 --directory dist
 ```
 
 Open `http://localhost:8000/hub/` and `http://localhost:8000/canones/`.
-The build copies each site's source plus common assets into `dist/hub` and
-`dist/canones`. Cloudflare Pages runs the same command and serves the respective
-directory. Generated `dist/` files are ignored by Git.
+The build requires Python 3.11+ and only its standard library. It assembles each
+site's source and common assets into `dist/hub` and `dist/canones`, rendering
+station metadata into HTML and JSON. Cloudflare Pages runs the same command and
+serves the respective directory. Generated `dist/` files are ignored by Git.
 
 The shared Pages headers require asset revalidation. HTML entry points additionally
 use `no-transform` to prevent automatic analytics injection; scripts and styles
 remain eligible for compression.
 
 `site/shared/assets/styles.css` defines the visual identity. `site-config.json`
-contains public domain/feed settings and the default data mode. Source navigation
-works on the production and test domains and in a local preview.
+contains public domain/feed settings and the default data mode; the build adds
+shared station metadata. Source navigation works on the production and test
+domains and in a local preview.
 
 The dashboard supports separate sample and live data modes. The production
 hostname selects the measured feed. Local previews start with samples; select
@@ -40,8 +42,28 @@ resize. A custom window retains its dates across unit/measurement changes and
 refreshes. Selecting a period or data mode resets it. The footer identifies the
 available record, which may extend beyond the displayed window.
 
-The heading's clock uses the visitor's device time, displayed in America/Denver.
-It is independent of observation timestamps.
+The heading's clock uses the visitor's device time, displayed in the configured
+station time zone. It is independent of observation timestamps.
+
+## Station metadata
+
+[`src/canones_weather/station.json`](../src/canones_weather/station.json) owns the
+station's stable ID, display name, and IANA time zone. To rename the station,
+edit only `name` there and rebuild both sites. The build updates headings, titles,
+descriptions, accessibility labels, structured data, browser settings, and sample
+display metadata. Source HTML uses `{{ station.name }}` and
+`{{ station.timezone }}`; JSON string contents inside structured-data scripts use
+`{{ station.name_json }}` for JSON escaping.
+
+The browser uses the built name for live chart labels, so an older feed's display
+name does not undo a rename. Station and dataset IDs remain authoritative for
+matching data. Reprovision the collector to update the name in subsequent live
+exports and the WeeWX location label. No archive or bucket migration is required.
+See [station identity](../docs/data.md#station-identity) for the data contract.
+
+Tracked sample fixtures are regenerated with `bin/generate-sample`; ordinary
+builds update only their copied display metadata. Documentation prose, artwork,
+and sample screenshots are maintained separately from the website build.
 
 ## Third-party software
 

@@ -7,7 +7,7 @@ After=network-online.target
 Type=simple
 User=canones-weather
 Group=canones-weather
-Environment=TZ=America/Denver
+Environment=TZ={{ weather_station.timezone }}
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart={{ weather_install_root }}/.venv/bin/weewxd {{ weather_state_root }}/weewx.conf
 Restart=on-failure

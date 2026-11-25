@@ -3,6 +3,24 @@
 The dashboard data contract is version 1. It separates current readings from
 chart history; neither file replaces the permanent WeeWX archive.
 
+## Station identity
+
+[`src/canones_weather/station.json`](../src/canones_weather/station.json) is the
+shared source for the station ID, display name, and IANA time zone. The exporter,
+publisher, sample generator, website build, and Pi configuration use it.
+
+`canones` is the permanent station ID. It identifies the station independently of
+its nickname; current observations use `station.id` and history uses `station_id`.
+The publisher and dashboard validate that ID, never the display name.
+`station.name` is descriptive metadata and may differ in older exported files.
+
+A rename changes only `name` in the metadata file. Rebuild both sites and
+reprovision the collector to publish the new name; retain the station ID,
+deployment dataset ID, archive, URLs, and `canones/` storage prefix. No observations
+need rewriting, and the JSON schema stays at version 1. Changing an ID or time
+zone is a separate data/configuration change, not a rename. A replacement archive
+still requires the dataset boundary described below.
+
 ## Current observations
 
 Publish `canones/current.json`, matching the shape of
