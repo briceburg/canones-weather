@@ -96,7 +96,7 @@ The sample generator uses only Python's standard library.
 ## Historical controls
 
 The chart-source checkboxes select station observations and references under
-New Mexico, Coastal, and Places of Excellence in Sample or Live mode.
+Regional, Coastal, and Places of Excellence in Sample or Live mode.
 The chart starts with station observations. Daily and seasonal views offer
 temperature, precipitation, wind, and humidity references where available.
 Selections persist in other views. Hide station observations for a reference-only

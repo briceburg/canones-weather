@@ -881,12 +881,8 @@ p {
 }
 .reference-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  column-gap: 24px;
-  max-width: 50rem;
-}
-@media (min-width: 48rem) {
-  .reference-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18.5rem), 1fr));
+  column-gap: 20px;
 }
 .reference-option {
   display: grid;
@@ -906,15 +902,15 @@ p {
   min-width: 0;
   line-height: 1.25;
 }
-.source-title { display: inline-flex; align-items: center; justify-self: start; min-width: 0; }
-.source-title label { font-size: .85rem; font-weight: 550; overflow-wrap: anywhere; }
-.source-place { color: var(--muted); font-size: .72rem; }
+.source-title { display: inline-flex; align-items: center; gap: 3px; justify-self: start; white-space: nowrap; }
+.source-title label { font-size: .85rem; font-weight: 550; }
+.source-place, .source-status { color: var(--muted); font-size: .72rem; white-space: nowrap; }
 .source-map {
   display: inline-grid;
-  flex: 0 0 24px;
-  min-height: 24px;
+  flex: none;
+  width: 24px;
+  height: 24px;
   place-items: center start;
-  padding-inline-start: 5px;
   color: var(--muted);
 }
 .source-map:hover, .source-map:focus-visible { color: var(--text); }
@@ -925,14 +921,13 @@ p {
   background: radial-gradient(circle, transparent 1.4px, currentColor 1.7px);
   transform: translateY(-1px) rotate(-45deg);
 }
-.source-status { grid-column: 3; color: var(--muted); font-size: .72rem; text-align: end; white-space: nowrap; }
+.source-status { grid-column: 3; text-align: end; }
+.source-footer { display: flex; flex-wrap: wrap; column-gap: 12px; }
 @media (max-width: 29rem) {
   .reference-option { grid-template-columns: 18px 25px minmax(0, 1fr); }
-  .reference-sources .reference-option input { align-self: start; margin-block-start: 6px; }
-  .reference-sources .source-swatch { align-self: start; margin-block-start: 11px; }
+  .reference-option input { align-self: start; margin-block-start: 6px; }
+  .source-swatch { align-self: start; margin-block-start: 11px; }
   .source-location { grid-template-columns: minmax(0, 1fr) 3.25rem; }
-  .reference-sources .source-location { grid-template-rows: minmax(24px, auto) minmax(15px, auto); }
   .source-title { grid-column: 1 / -1; }
-  .source-place { grid-row: 2; grid-column: 1; }
-  .source-status { grid-row: 2; grid-column: 2; }
+  .source-status { grid-area: 2 / 2; }
 }
