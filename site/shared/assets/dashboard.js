@@ -673,19 +673,14 @@ async function load({ refresh = false } = {}) {
     state.mode === "sample"
       ? new URL("./data/sample/", location.href).href
       : settings.feed;
-  state.loading = true;
   if (!refresh) {
     state.current = null;
     state.history = null;
-    renderCurrent();
-    renderChart();
-    selected("mode", state.mode);
-    notice(
-      state.mode === "sample"
-        ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
-        : "Connecting to the station feed…",
-    );
   }
+  state.loading = true;
+  renderCurrent();
+  renderChart();
+  selected("mode", state.mode);
   if (!source) {
     state.loading = false;
     notice(
@@ -699,6 +694,11 @@ async function load({ refresh = false } = {}) {
   }
   $("json-link").href = `${source}current.json`;
   $("json-link").hidden = false;
+  notice(
+    state.mode === "sample"
+      ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
+      : "Connecting to the station feed…",
+  );
   const signal = AbortSignal.timeout(15000);
   const [current, history] = await Promise.allSettled([
     readJSON(`${source}current.json`, signal).then(validCurrent),
