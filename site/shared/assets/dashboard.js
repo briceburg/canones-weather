@@ -233,7 +233,7 @@ function validReference(data, key) {
     previous = Date.parse(row.at);
     for (const field of ["temperature_min_c", "temperature_max_c", "rain_mm"])
       if (row[field] !== null && !numeric(row[field])) throw new Error("Invalid reference value");
-    for (const field of ["humidity_pct", "wind_speed_m_s", "solar_w_m2"])
+    for (const field of ["humidity_pct", "wind_speed_m_s"])
       if (row[field] != null && (!numeric(row[field]) || row[field] < 0))
         throw new Error("Invalid reference value");
     if (numeric(row.rain_mm) && row.rain_mm < 0 || numeric(row.temperature_min_c) &&
@@ -369,17 +369,20 @@ function renderChart() {
   let rows = state.showStation ? selectRows(history) : [];
   const {label, field, color, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : settings.station.name;
-  $("history-subtitle").textContent = state.showStation
+  const stationSubtitle = state.showStation
     ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
     : "Station observations hidden · Mountain Time";
   $("history-resolution").textContent = `${resolution} summaries`;
   const canCompare = daily || seasonal;
   $("reference-sources").disabled = !canCompare;
   const activeControls = [];
+  let hasEligibleSource = false;
   for (const input of referenceInputs) {
     const key = input.dataset.control;
-    input.disabled = canCompare && !input.dataset.metrics.split(" ").includes(state.metric);
-    input.checked = !input.disabled && state.controls.has(key);
+    const supportsMetric = input.dataset.metrics.split(" ").includes(state.metric);
+    hasEligibleSource ||= supportsMetric;
+    input.disabled = !supportsMetric;
+    input.checked = supportsMetric && state.controls.has(key);
     if (canCompare && input.checked) activeControls.push(key);
   }
   const showReferences = activeControls.length > 0;
@@ -397,6 +400,7 @@ function renderChart() {
     rows: selectRows(data),
   }));
   const controlNote = !canCompare ? "Widen past 24h or choose 30d to compare daily references."
+    : !hasEligibleSource ? "No references report the selected metric."
     : !showReferences ? "Select sources to compare regional weather."
     : activeControls.map((key) => {
       const {name} = referenceSources[key];
@@ -440,10 +444,10 @@ function renderChart() {
     const stationInWindow = rows.some((row) => inWindow(row) && plottedFields.some(([key]) => numeric(row[key])));
     const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
       inWindow(row) && hasReferenceValue(row)));
-    if (showReferences)
-      $("history-subtitle").textContent = stationInWindow
-        ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
-        : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
+    const subtitle = !referenceInWindow ? stationSubtitle : stationInWindow
+      ? `${state.mode === "sample" ? "Sample station" : "Station observations"} + reference history · Mountain Time`
+      : `Reference history only · ${state.showStation ? "no station observations in this window" : "station observations hidden"} · Mountain Time`;
+    if ($("history-subtitle").textContent !== subtitle) $("history-subtitle").textContent = subtitle;
     const status = controlNote + (comparisons.length && !referenceInWindow
       ? " · No reference observations in this window" : "");
     if ($("control-note").textContent !== status) $("control-note").textContent = status;
@@ -453,8 +457,9 @@ function renderChart() {
   $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
-    const emptyMessage = !state.showStation && !state.controls.size
-      ? "Choose observations or\nreference history to display."
+    const selectionPrompt = canCompare && hasEligibleSource
+      ? "Choose observations or\nreference history to display." : "Enable station observations to display history.";
+    const emptyMessage = !state.showStation && !showReferences ? selectionPrompt
       : state.loading ? "Loading history…"
       : state.metric === "solar" ? "No solar observations in this period." : seasonal ? "Seasonal comparisons need daily history." : "No observations in this period.";
     timelineDomain = null;

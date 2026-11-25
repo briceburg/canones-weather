@@ -70,7 +70,7 @@ STATIONS = {
         "longitude": -123.0747,
         "elevation_m": 19.2,
         "provider": "USCRN",
-        "additional_metrics": ("humidity", "solar"),
+        "additional_metrics": ("humidity",),
     },
     "milwaukee": {
         "name": "Milwaukee Mitchell Airport · NOAA observations",
@@ -95,7 +95,7 @@ USCRN_URL = "https://www.ncei.noaa.gov/pub/data/uscrn/products/daily01/"
 AEMET_DAILY_URL = "https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos"
 AEMET_ARCHIVE_START = date(2020, 9, 1)
 FIELDS = {"TMIN": "temperature_min_c", "TMAX": "temperature_max_c", "PRCP": "rain_mm"}
-ADDITIONAL_FIELDS = ("wind_speed_m_s", "humidity_pct", "solar_w_m2")
+ADDITIONAL_FIELDS = ("wind_speed_m_s", "humidity_pct")
 
 
 def download(url, *, api_key=None):
@@ -196,20 +196,18 @@ def uscrn_rows(text, station_id, year, *, complete_year=False):
         if day <= previous or day.year != year:
             raise ValueError("Invalid USCRN reporting calendar")
         previous = day
-        # Convert daily solar energy (MJ/m²) to mean irradiance (W/m²) over the 24-hour LST day.
         values = {}
         for field, index in (
             ("temperature_min_c", 6),
             ("temperature_max_c", 5),
             ("rain_mm", 9),
-            ("solar_w_m2", 10),
             ("humidity_pct", 17),
         ):
             value = float(columns[index])
             if not math.isfinite(value):
                 raise ValueError("Invalid USCRN observation")
             if value != -9999:
-                values[field] = round(value * 1_000_000 / 86400, 4) if field == "solar_w_m2" else value
+                values[field] = value
         if values:
             rows[day] = values
     if complete_year and previous != date(year, 12, 31):
@@ -307,7 +305,7 @@ def document(source, rows, start, end):
     for row in daily:
         low, high = row["temperature_min_c"], row["temperature_max_c"]
         humidity = row.get("humidity_pct")
-        nonnegative = (row.get(field) for field in ("rain_mm", "wind_speed_m_s", "solar_w_m2"))
+        nonnegative = (row.get(field) for field in ("rain_mm", "wind_speed_m_s"))
         if (
             (low is not None and high is not None and low > high)
             or (humidity is not None and not 0 <= humidity <= 100)

@@ -60,7 +60,6 @@ equivalent.
 | --- | --- | --- |
 | Average wind speed (m/s) | Albuquerque, Santa Fe, Downtown Charleston, Milwaukee, Port de Sóller | NOAA GHCN-Daily `AWND`, AEMET `velmedia` |
 | Average relative humidity (%) | Bodega Marine, Port de Sóller | NOAA USCRN `RH_DAILY_AVG`, AEMET `hrMedia` |
-| Average solar irradiance (W/m²) | Bodega Marine | NOAA USCRN `SOLARAD_DAILY` converted from daily energy over 24 hours |
 
 The peak gust series comes from Secco Spring. Wind exposure and sensor heights
 vary by site.

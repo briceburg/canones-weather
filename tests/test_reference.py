@@ -93,7 +93,7 @@ def test_uscrn_uses_native_daily_units_and_leaves_missing_fields_empty():
 """
     rows = reference.uscrn_rows(text, "USW00093245", 2026)
     assert rows == {
-        date(2026, 11, 19): {"temperature_min_c": 6.5, "rain_mm": 1.2, "solar_w_m2": 100, "humidity_pct": 70.2},
+        date(2026, 11, 19): {"temperature_min_c": 6.5, "rain_mm": 1.2, "humidity_pct": 70.2},
         date(2026, 11, 20): {"temperature_min_c": 7.8, "temperature_max_c": 14.9},
     }
     with pytest.raises(ValueError, match="station"):
