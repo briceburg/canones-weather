@@ -35,16 +35,17 @@ see the [Pi guide](../deploy/raspberry-pi/README.md).
 Select temperature, humidity, wind, rain, or solar irradiance. The 24h view uses
 hourly summaries. The 30d, 1y, 3y, and All views use daily summaries,
 including temperature lows and highs. Seasons and Monsoon aggregate daily records.
-The data feed also includes a measured temperature mean. The station-only chart
-uses it when an older feed supplies no lows or highs.
+The data feed also includes a measured temperature mean.
 Display units do not change stored data; see [the data contract](../docs/data.md).
 
 Live presets end at the visitor's current time and show gaps if observations
 are missing. Sample presets end at the sample timestamp. Drag the timeline
 window to pan without changing its width. Earlier and Later step by an hour
-in 24h and by a day in longer views. Drag the handles, select across the
-plot, or open Set date range to enter both ends in UTC. A custom window
-retains its dates across measurement and unit changes and feed refreshes.
+in hourly views and by a day in daily views. Drag the handles, select across the
+plot, or open Set date range to enter both ends in UTC. Widening a 24h window
+beyond 24 hours switches it to daily summaries and enables reference overlays
+for temperature and rain. A custom window retains its dates across measurement
+and unit changes and feed refreshes.
 Select a period or data mode to reset it.
 
 The heading's clock uses the visitor's device time, displayed in the configured
@@ -94,12 +95,13 @@ The sample generator uses only Python's standard library.
 
 ## Historical controls
 
-The chart-source checkboxes independently select station observations, Daymet,
-Abiquiu Dam, Albuquerque airport, and Madrid 1.9 SE in Sample or Live mode. Station observations and Daymet
-are selected by default. References appear only for historical temperature and
-precipitation views; selections persist in unsupported views without changing
-the period or measurement. Madrid appears only for precipitation. Hide station
-observations for a reference-only chart.
+The chart-source checkboxes select station observations and references under
+New Mexico, Coastal, and Places of Excellence in Sample or Live mode.
+The chart starts with station observations. Reference checkboxes are enabled for daily
+and seasonal temperature and precipitation views. Selections persist in other
+views. Hide station observations for a reference-only chart. Use the map pin
+beside a reference to open its station map. The
+[reference guide](../docs/reference-data.md#station-locations) includes provider details.
 
 Reference sources are labeled separately and never fill station gaps. Sample
 station series and their start marker remain illustrative; references retain

@@ -1,6 +1,11 @@
 export const HOUR = 3600000;
 export const DAY = 24 * HOUR;
 
+export function usesDailyHistory(presetDays, view) {
+  // Allow one millisecond of rounding when converting slider percentages to dates.
+  return presetDays > 1 || (view != null && view.to - view.from > DAY + 1);
+}
+
 export function timeDomain(first, now, days) {
   const start = Number.isFinite(days) ? Math.min(first, now - days * DAY) : first;
   return {start, end: now};

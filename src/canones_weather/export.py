@@ -79,7 +79,7 @@ def documents(manager, record):
     first = manager.first_timestamp
     start = archiveDaySpan(first).start
     hourly_stop = int(timestamp // 3600) * 3600
-    daily_stop = startOfDay(timestamp)
+    day_start = startOfDay(timestamp)
     deployment = {
         "phase": "pilot",
         "dataset_id": f"pilot-{first}",
@@ -100,9 +100,8 @@ def documents(manager, record):
         "hourly": history_rows(
             manager, max(int((first - 1) // 3600) * 3600, hourly_stop - 30 * 86400), hourly_stop, 3600
         ),
-        "daily": history_rows(manager, start, daily_stop, "day"),
+        "daily": history_rows(manager, start, day_start, "day"),
     }
-    day_start = startOfDay(timestamp)
     rain_today = number(metric.get("dayRain"))
     if rain_today is not None and rain_today < 0:
         rain_today = None

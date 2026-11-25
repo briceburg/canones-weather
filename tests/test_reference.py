@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from canones_weather import reference
-from canones_weather.reference import daymet_rows, document, noaa_rows
+from canones_weather.reference import document, noaa_rows
 
 
 def test_noaa_excludes_failed_quality_and_presumed_zero_but_retains_trace():
@@ -28,45 +28,23 @@ def test_noaa_excludes_failed_quality_and_presumed_zero_but_retains_trace():
     assert rows[date(2024, 2, 4)] == {"rain_mm": 0.0, "precipitation_trace": True}
 
 
-def test_daymet_leap_day_and_absent_december_31_preserve_calendar_gaps():
-    text = """Elevation: 2328 meters
-year,yday,prcp (mm/day),tmax (deg c),tmin (deg c)
-2024,60,1.2,10,-3
-2024,365,0,5,-5
-"""
-    start, end = date(2024, 2, 28), date(2024, 12, 31)
-    rows, elevation = daymet_rows(text, start, end)
-    assert elevation == 2328
-    assert rows[date(2024, 2, 29)]["temperature_min_c"] == -3
-    assert rows[date(2024, 12, 30)]["temperature_max_c"] == 5
-    data = document({"id": "daymet", "type": "modeled"}, rows, start, end)
-    assert data["kind"] == "reference"
-    assert data["daily"][-1] == {
-        "at": "2024-12-31T00:00:00-07:00",
-        "temperature_min_c": None,
-        "temperature_max_c": None,
-        "rain_mm": None,
-    }
-    assert "temperature_c" not in data["daily"][-2]  # No invented daily mean.
-
-
 def test_failed_provider_preserves_its_cache_and_does_not_stop_peer(tmp_path, monkeypatch):
-    prior = tmp_path / "daymet.json"
+    prior = tmp_path / "abiquiu.json"
     prior.write_text("previous validated snapshot\n")
     data = document(
-        {"id": "abiquiu"}, {date(2025, 1, 1): {"temperature_min_c": 1.0}}, date(2025, 1, 1), date(2025, 1, 1)
+        {"id": "albuquerque"}, {date(2025, 1, 1): {"temperature_min_c": 1.0}}, date(2025, 1, 1), date(2025, 1, 1)
     )
 
     def fetch(key, args):
-        if key == "daymet":
+        if key == "abiquiu":
             raise OSError("Provider unavailable")
         return {**data, "source": {"id": key}}
 
     monkeypatch.setattr(reference, "fetch_reference", fetch)
-    monkeypatch.setattr(sys, "argv", ["reference", "--latitude", "36", "--longitude=-106", "--output", str(tmp_path)])
+    monkeypatch.setattr(sys, "argv", ["reference", "--output", str(tmp_path)])
     assert reference.main() == 1
     assert prior.read_text() == "previous validated snapshot\n"
-    for key in reference.NOAA_STATIONS:
+    for key in reference.STATIONS.keys() - {"abiquiu"}:
         assert json.loads((tmp_path / f"{key}.json").read_text())["source"]["id"] == key
 
 
@@ -100,9 +78,38 @@ def test_abiquiu_supplement_recovers_absent_months_without_overriding_ghcn(monke
         reference.supplement_abiquiu(text, rows, date(2024, 1, 31), date(2024, 2, 2))
 
 
-def test_precipitation_only_reference_keeps_temperature_missing():
+def test_reference_day_preserves_precipitation_when_temperature_is_missing():
     day = date(2025, 7, 1)
-    data = document({"id": "madrid"}, {day: {"rain_mm": 2.54}}, day, day)
+    data = document({"id": "abiquiu"}, {day: {"rain_mm": 2.54}}, day, day)
     assert data["daily"][0]["rain_mm"] == 2.54
     assert data["daily"][0]["temperature_min_c"] is None
     assert data["daily"][0]["temperature_max_c"] is None
+
+
+def test_uscrn_uses_native_daily_units_and_leaves_missing_fields_empty():
+    text = """93245 20261119 2.622 -123.07 38.32 -9999.0 6.5 -9999.0 -9999.0 1.2
+93245 20261120 2.622 -123.07 38.32 14.9 7.8 11.3 11.0 -9999.0
+"""
+    rows = reference.uscrn_rows(text, "USW00093245", 2026)
+    assert rows == {
+        date(2026, 11, 19): {"temperature_min_c": 6.5, "rain_mm": 1.2},
+        date(2026, 11, 20): {"temperature_min_c": 7.8, "temperature_max_c": 14.9},
+    }
+    with pytest.raises(ValueError, match="station"):
+        reference.uscrn_rows(text, "USW00003062", 2026)
+    with pytest.raises(ValueError, match="Incomplete USCRN annual file"):
+        reference.uscrn_rows(text, "USW00093245", 2026, complete_year=True)
+
+
+def test_aemet_parses_trace_and_skips_multiday_precipitation():
+    first, last = date(2026, 11, 19), date(2026, 11, 20)
+    records = [
+        {"fecha": first.isoformat(), "indicativo": "B051A", "tmin": "7,8", "prec": "Ip"},
+        {"fecha": last.isoformat(), "indicativo": "B051A", "tmax": "14,9", "prec": "Acum"},
+    ]
+    assert reference.aemet_rows(records, "B051A", first, last) == {
+        first: {"temperature_min_c": 7.8, "rain_mm": 0.0, "precipitation_trace": True},
+        last: {"temperature_max_c": 14.9},
+    }
+    with pytest.raises(ValueError, match="reporting calendar"):
+        reference.aemet_rows([*records, records[-1]], "B051A", first, last)

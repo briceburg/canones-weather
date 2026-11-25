@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        source: [abiquiu, daymet, albuquerque, madrid]
+        source: [abiquiu, albuquerque, santa-fe, gila-hot-springs, charleston, crozier, bodega, milwaukee, soller]
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -48,8 +48,9 @@ jobs:
           Path('tmp/publisher.json').write_text(json.dumps(config))
           PY
       - name: Refresh and publish validated control
+        env:
+          AEMET_API_KEY: ${{ matrix.source == 'soller' && secrets.AEMET_API_KEY || '' }}
         run: >-
           uv run --locked --group station python -m canones_weather.reference
           --source ${{ matrix.source }}
-          --latitude 36.150028 --longitude=-106.445500
           --publish-config tmp/publisher.json

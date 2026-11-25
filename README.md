@@ -14,14 +14,14 @@ the years—with a public dashboard and reusable data.
 - Efficient publishing from Ecowitt hardware and a Raspberry Pi, using local
   collection, Cloudflare Pages, and R2 storage designed to fit free-tier allowances.
 - A responsive, dark-only dashboard with interactive weather charts, selectable
-  units, seasonal views, and separately attributed Daymet/NOAA historical controls.
+  units, seasonal views, and separately attributed regional observations.
 - Reusable JSON observations with timestamps and sensor sources, decoupling
   data collection from the website.
 
 <details>
 <summary>See the station dashboard · sample data</summary>
 
-![Secco Spring dashboard showing illustrative station observations overlaid with attributed Daymet and NOAA reference data.](docs/assets/dashboard-preview.png)
+![Secco Spring dashboard showing illustrative station observations with regional references.](docs/assets/dashboard-preview.png)
 
 </details>
 

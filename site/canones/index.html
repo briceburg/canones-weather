@@ -19,7 +19,7 @@
   "@type": "Dataset",
   "@id": "https://canones.weather.iceburg.net/#observations",
   "name": "{{ station.name_json }} weather observations, Cañones, New Mexico",
-  "description": "Public local weather observations with timestamps, sensor provenance, and pilot notices. Historical NOAA observations and Daymet grid estimates are separate comparison datasets, not local station measurements.",
+  "description": "Public local weather observations with timestamps, sensor provenance, and pilot notices. Regional weather observations provide separately attributed comparisons.",
   "url": "https://canones.weather.iceburg.net/",
   "isAccessibleForFree": true,
   "creator": {
@@ -287,15 +287,12 @@
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
             <label><input type="checkbox" id="show-station-history" checked /> Station observations</label>
-            <fieldset class="reference-sources">
+            <fieldset class="reference-sources" id="reference-sources" aria-describedby="control-note" disabled>
               <legend>Reference history</legend>
-              <label><input type="checkbox" data-control="daymet" checked /> <span>Daymet <span class="muted">— modeled near station</span></span></label>
-              <label><input type="checkbox" data-control="abiquiu" /> <span>Abiquiu Dam <span class="muted">— NOAA + RCC-ACIS</span></span></label>
-              <label><input type="checkbox" data-control="albuquerque" /> <span>Albuquerque airport <span class="muted">— NOAA</span></span></label>
-              <label><input type="checkbox" data-control="madrid" /> <span>Madrid 1.9 SE <span class="muted">— precipitation only</span></span></label>
+              <p id="control-note" class="small" aria-live="polite">Widen past 24h or choose 30d to compare daily references.</p>
+              {{ reference_groups }}
             </fieldset>
-            <p id="control-note" class="small" aria-live="polite">Select sources to compare regional weather.</p>
-            <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md">Sources, coverage &amp; methods ↗</a>
+            <a class="small" href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md#station-locations">Sources, coverage &amp; methods ↗</a>
           </fieldset>
           <p class="chart-description" id="chart-description" hidden></p>
           <a id="monsoon-source" class="small" href="https://www.weather.gov/abq/prepawaremonsoonhome" hidden>NWS monsoon season: June 15–September 30 ↗</a>
@@ -337,7 +334,7 @@
             <h3>Weather, shared openly.</h3>
             <p>
               Explore local observations over time, or compare the separately
-              labeled Daymet and NOAA controls. Recorded here, shared with you.
+              labeled regional weather observations. Recorded here, shared with you.
             </p>
             <p><a class="small" href="https://data.weather.iceburg.net/canones/history.json">Public station history · JSON ↗</a></p>
             <p id="provenance">
