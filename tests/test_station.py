@@ -46,8 +46,8 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         before_config = json.loads((site / "canones/assets/site-config.json").read_text())
         before_page = (site / "canones/index.html").read_text()
 
-        # Quotes, ampersands, and a script end tag must remain literal display text.
-        name = 'Spring & "Ridge" </script>'
+        # Markup and template-like text must remain literal display text.
+        name = 'Spring & "Ridge" </script> {{ station.timezone }}'
         metadata["name"] = name
         metadata_path.write_text(json.dumps(metadata))
         export(manager, record, public)
@@ -78,7 +78,6 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         page = (site / route / "index.html").read_text()
         assert heading in page
         assert f'aria-label="View {escape(name)} station on OpenStreetMap"' in page
-        assert "{{ station." not in page
         config = json.loads((site / route / "assets/site-config.json").read_text())
         assert config["station"] == metadata
         before_config["station"]["name"] = name
