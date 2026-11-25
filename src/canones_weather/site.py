@@ -30,13 +30,13 @@ REFERENCE_GROUPS = {
         ("gila-hot-springs", "Gila Hot Springs", ""),
     ),
     "Coastal": (
-        ("bodega", "Bodega Marine", ", CA"),
-        ("soller", "Port de Sóller", ", Mallorca · © AEMET"),
-        ("charleston", "Downtown Charleston", ", SC"),
+        ("bodega", "Bodega Marine", "CA"),
+        ("soller", "Port de Sóller", "Mallorca · © AEMET"),
+        ("charleston", "Downtown Charleston", "SC"),
     ),
     "Places of Excellence": (
-        ("crozier", "Crozier", ", VA"),
-        ("milwaukee", "Milwaukee airport", ", WI"),
+        ("crozier", "Crozier", "VA"),
+        ("milwaukee", "Milwaukee airport", "WI"),
     ),
 }
 
@@ -45,7 +45,7 @@ def map_url(latitude, longitude, zoom=14):
     return f"https://www.openstreetmap.org/?mlat={latitude}&mlon={longitude}#map={zoom}/{latitude}/{longitude}"
 
 
-def source_option(key, name, place, url, input_attributes):
+def source_option(key, name, place, url, *, metrics=None):
     color, dashes = SOURCE_STYLES[key]
     swatch = color
     if dashes:
@@ -58,34 +58,32 @@ def source_option(key, name, place, url, input_attributes):
         swatch = f"repeating-linear-gradient(90deg, {', '.join(stops)})"
     pattern = " ".join(map(str, dashes))
     name = escape(name)
-    hint = f'<span class="muted">{escape(place)}</span>' if place else ""
+    hint = f'<span class="source-place">{escape(place)}</span>' if place else ""
+    input_id = f"reference-{key}" if metrics else "show-station-history"
+    attributes = f'data-control="{key}" data-name="{name}" data-metrics="{metrics}"' if metrics else "checked"
+    status = f'<span class="source-status" id="{input_id}-status" hidden>No data</span>' if metrics else ""
     return (
         f'<span class="reference-option" data-color="{color}" data-pattern="{pattern}" '
         f'style="--source-color: {color}; --source-swatch: {swatch}">'
-        f'<label><input type="checkbox" {input_attributes} />'
-        f'<span class="source-swatch" aria-hidden="true"></span><span>{name}{hint}</span></label>'
-        f'<a href="{escape(url)}" aria-label="Map of {name} (opens in a new tab)" '
-        'target="_blank" rel="noopener">📍</a></span>'
+        f'<input id="{input_id}" type="checkbox" {attributes} />'
+        '<span class="source-swatch" aria-hidden="true"></span>'
+        f'<span class="source-location"><span class="source-title"><label for="{input_id}">{name}</label>'
+        f'<a class="source-map" href="{escape(url)}" aria-label="Map of {name} (opens in a new tab)" '
+        f'target="_blank" rel="noopener"><span class="map-pin" aria-hidden="true"></span></a></span>'
+        f"{hint}{status}</span></span>"
     )
 
 
 def reference_groups():
     groups = []
     for title, options in REFERENCE_GROUPS.items():
-        groups.append(f'<fieldset class="reference-group"><legend>{escape(title)}</legend>')
+        groups.append(f'<fieldset class="reference-group"><legend>{escape(title)}</legend><div class="reference-grid">')
         for key, name, place in options:
             reference = STATIONS[key]
             metrics = " ".join(("temperature", "rain", *reference.get("additional_metrics", ())))
-            groups.append(
-                source_option(
-                    key,
-                    name,
-                    place,
-                    map_url(reference["latitude"], reference["longitude"]),
-                    f'data-control="{key}" data-name="{escape(name)}" data-metrics="{metrics}"',
-                )
-            )
-        groups.append("</fieldset>")
+            url = map_url(reference["latitude"], reference["longitude"])
+            groups.append(source_option(key, name, place, url, metrics=metrics))
+        groups.append("</div></fieldset>")
     return "\n".join(groups)
 
 
@@ -122,7 +120,6 @@ def build_site(repo_root, output_root):
                 station["name"],
                 "",
                 map_url(*STATION_LOCATION, zoom=15),
-                'id="show-station-history" checked',
             )
             html = html.replace("{{ station_option }}", local_source)
             html = html.replace("{{ reference_groups }}", reference_groups())

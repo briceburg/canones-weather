@@ -42,8 +42,12 @@ function sourceStyle(input) {
 const stationInput = $("show-station-history");
 const stationStyle = sourceStyle(stationInput);
 const referenceInputs = [...document.querySelectorAll("[data-control]")];
-const referenceSources = Object.fromEntries(referenceInputs.map((input) =>
-  [input.dataset.control, {name: input.dataset.name, ...sourceStyle(input)}]));
+const referenceSources = Object.fromEntries(referenceInputs.map((input) => [input.dataset.control, {
+  name: input.dataset.name,
+  metrics: input.dataset.metrics.split(" "),
+  status: $(`${input.id}-status`),
+  ...sourceStyle(input),
+}]));
 const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
 const minute = HOUR / 60;
 const state = {
@@ -373,13 +377,16 @@ function renderChart() {
   const canCompare = daily || seasonal;
   $("reference-sources").disabled = !canCompare;
   const activeControls = [];
-  let hasEligibleSource = false;
+  const hasEligibleSource = Object.values(referenceSources).some(({metrics}) => metrics.includes(state.metric));
   for (const input of referenceInputs) {
     const key = input.dataset.control;
-    const supportsMetric = input.dataset.metrics.split(" ").includes(state.metric);
-    hasEligibleSource ||= supportsMetric;
+    const {metrics, status} = referenceSources[key];
+    const supportsMetric = metrics.includes(state.metric);
     input.disabled = !supportsMetric;
     input.checked = supportsMetric && state.controls.has(key);
+    status.hidden = !canCompare || !hasEligibleSource || supportsMetric;
+    if (status.hidden) input.removeAttribute("aria-describedby");
+    else input.setAttribute("aria-describedby", status.id);
     if (canCompare && input.checked) activeControls.push(key);
   }
   const showReferences = activeControls.length > 0;
