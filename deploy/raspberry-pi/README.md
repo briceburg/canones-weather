@@ -12,6 +12,11 @@ With Ansible installed, set these values in the ignored `.env`:
 - `WEATHER_GATEWAY_URL`: the gateway HTTP origin. The pinned driver uses HTTP.
 - `WEATHER_ELEVATION_M`: ground elevation in metres above sea level.
 
+Prefer local DNS names for the gateway origin and SSH target. After router or
+DHCP changes, verify DNS and gateway access from the Pi, then redeploy with the
+updated local configuration. Correct reservations and DNS do not update an old
+numeric address already installed in the collector configuration.
+
 From repository root:
 
 ```sh
@@ -55,6 +60,28 @@ by commit and SHA-256. Rain uses the WS90 piezo year-counter delta, and solar
 radiation maps to the gateway's light field. The driver normalizes that field
 to lux; the collector reverses its 126.7 conversion to restore W/m². Verify units and mapping against the
 raw gateway response. See [station requirements](../../docs/station.md).
+
+## Recover missing pilot observations
+
+`bin/pi deploy` enables the fifteen-minute recovery timer by default. Take a
+consistent archive backup before enabling it on an existing pilot. To deploy
+with scheduled recovery disabled, pass
+`-e '{"weather_sd_recovery": false}'` to `bin/pi deploy`. The collector runs
+independently of the timer.
+
+To preview recovery on the Pi, run:
+
+```sh
+sudo -u canones-weather /opt/canones-weather/.venv/bin/python \
+  -m canones_weather.recover /var/lib/canones-weather/pilot/weewx.conf --dry-run
+```
+
+The preview saves validated SD CSVs under the pilot's private `recovery/`
+directory and reports the number of eligible records. The timer reports
+insertions and download failures in `journalctl -u canones-weather-recover.service`.
+The next successful collector export includes the recovered observations.
+See [outages and recovery](../../docs/station.md#outages-and-recovery) for
+coverage, provenance, and measurement limitations.
 
 ## Inspect the pilot in the local dashboard
 
@@ -126,6 +153,12 @@ and passed to an isolated service. `canones-weather-publish.timer` uploads histo
 then current JSON every five minutes, preserving the observation time and dataset
 notice. It rejects samples, mismatched datasets, and unverified production data.
 The broad Cloudflare infrastructure token belongs only on the deployment host.
+
+The publisher can repeatedly upload old exports. Check `current.json`'s
+`observed_at`, `history.json`'s `through`, the latest archive record, and collector
+restarts and logs to assess freshness. Upload and file modification times do not
+date the observations. See [outages and SD recovery](../../docs/station.md#outages-and-recovery)
+before importing gateway files or enabling catch-up.
 
 Inspect publishing with `systemctl status canones-weather-publish.timer` and
 `journalctl -u canones-weather-publish.service` on the Pi. Stop public updates with

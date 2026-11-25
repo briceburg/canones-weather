@@ -81,6 +81,11 @@ current conditions may be newer. Use WeeWX aggregation for exports; do not
 reconstruct archive records from instantaneous gateway snapshots. Represent
 missing intervals with timestamped rows of `null` values so gaps remain visible
 in plots. The dashboard displays times in the station's time zone.
+
+Pilot history can include documented GW3000 SD samples for missing intervals.
+These samples retain their source and logged timestamps in the private archive.
+See [outages and recovery](station.md#outages-and-recovery) for their coverage
+and aggregation limitations.
 Hourly and daily temperatures include mean, minimum, and maximum; averaging must not discard
 extremes or turn missing rainfall into a dry period.
 

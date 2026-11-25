@@ -40,9 +40,33 @@ disabled until mapping is verified; exclude indoor and garage temperatures.
 
 ## Outages and recovery
 
-No gateway SD card is installed. A Pi outage can leave gaps in the archive.
-Local collection must continue during internet outages. Verify gateway history
-retrieval before relying on SD-card recovery.
+The GW3000's SD card logs every five minutes, matching the WeeWX archive interval;
+WeeWX polls live data every 20 seconds. The card records independently of the Pi
+while the gateway has power and receives sensor data. It cannot recover readings
+from before recording began or while power or reception was lost. Retain the
+permanent WeeWX archive and off-device backups independently.
+
+The [SD recovery timer](../deploy/raspberry-pi/README.md#recover-missing-pilot-observations)
+fills absent records within the latest 31 days of pilot history once live
+collection resumes. It uses samples whose local and epoch times agree on a
+five-minute logging minute. Off-grid, conflicting, or unavailable samples leave
+gaps. Existing archive rows take precedence. WeeWX's built-in startup catch-up
+remains disabled.
+
+SD samples use the units in the CSV header. Solar radiation already in W/m²
+bypasses the live lux correction. Rain stays missing because counter differences
+can overlap rainfall already recorded across an outage. Recovered samples
+contribute to the usual summaries and may differ from the live polling
+aggregates. The private archive records their origin in `canones_recovery`.
+
+SD recovery needs gateway HTTP on port 80 for the file list and TCP port 81 for
+downloads. The Pi can use its LAN connection for both. See the
+[GW3000 SD-card manual](https://oss.ecowitt.net/uploads/20260320/GW3000Manual.pdf#page=72).
+
+During internet outages, collection should continue while the Pi, gateway, LAN,
+and sensor reception remain available. Compare archive and export observation
+timestamps with collector and publisher logs to distinguish collection gaps from
+delayed uploads.
 
 ## Commissioning
 
