@@ -30,13 +30,14 @@ FILE_NAME = re.compile(r"\d{6}[A-Z]\.csv")
 MAX_BYTES = 16_000_000
 INTERVAL = 300
 LOOKBACK = 31 * 86400
+UPPER_LIMITS = {"outHumidity": 100, "windDir": 360}
 FIELDS = {
-    "Outdoor Temperature": ("outTemp", "group_temperature", "degree_C"),
-    "Outdoor Humidity": ("outHumidity", "group_percent", "percent"),
-    "Wind": ("windSpeed", "group_speed", "meter_per_second"),
-    "Gust": ("windGust", "group_speed", "meter_per_second"),
-    "Wind Direction": ("windDir", "group_direction", "degree_compass"),
-    "Solar Rad": ("radiation", "group_radiation", "watt_per_meter_squared"),
+    "Outdoor Temperature": "outTemp",
+    "Outdoor Humidity": "outHumidity",
+    "Wind": "windSpeed",
+    "Gust": "windGust",
+    "Wind Direction": "windDir",
+    "Solar Rad": "radiation",
 }
 UNITS = {
     "°C": "degree_C",
@@ -53,54 +54,57 @@ UNITS = {
 }
 
 
-def sd_records(name, body, zone):
-    """Map primary-sensor samples to archive units, preserving the source timestamp."""
+def sd_records(name, body, zone, missing):
+    """Convert primary-sensor samples only for missing archive intervals."""
     reader = csv.DictReader(io.StringIO(body.decode("utf-8-sig")), strict=True)
     columns = {}
     for header in reader.fieldnames or []:
         match = re.fullmatch(r"(.+)\(([^()]*)\)", header)
         if match and match[1] in FIELDS:
-            stem, unit = match.groups()
-            if stem in columns or unit not in UNITS:
+            field, unit = FIELDS[match[1]], match[2]
+            if field in columns or unit not in UNITS:
                 raise ValueError(f"Ambiguous or unsupported SD column: {header}")
-            columns[stem] = (header, UNITS[unit])
-    if not {"Time", "Timestamp"}.issubset(reader.fieldnames or []) or set(columns) != set(FIELDS):
+            target, group = weewx.units.getStandardUnitType(weewx.METRICWX, field)
+            columns[field] = (header, UNITS[unit], target, group)
+    if not {"Time", "Timestamp"}.issubset(reader.fieldnames or []) or len(columns) != len(FIELDS):
         raise ValueError("SD file lacks required primary sensor columns")
-    records = []
     for raw in reader:
         # The gateway can be appending the final CSV line during a download.
         if None in raw or any(value is None for value in raw.values()):
             raise ValueError("Incomplete SD CSV row; retry a complete download")
         epoch = int(raw["Timestamp"])
-        try:
-            local = datetime.fromtimestamp(epoch, zone)
-        except (OSError, OverflowError) as error:
-            raise ValueError("Invalid SD timestamp") from error
-        if local.strftime("%Y-%m-%d %H:%M") != raw["Time"] or local.minute % 5:
-            continue
         stamp = epoch - epoch % 60
-        record = {"dateTime": stamp, "usUnits": weewx.METRICWX, "interval": 5}
-        for stem, (header, unit) in columns.items():
-            field, group, target = FIELDS[stem]
-            value = None if raw[header] in ("", "--") else float(raw[header])
-            if value is not None:
-                try:
-                    value = weewx.units.convert((value, unit, group), target)[0]
-                except KeyError as error:
-                    raise ValueError(f"Unsupported units in {header}") from error
-                if not math.isfinite(value) or (field != "outTemp" and value < 0):
-                    raise ValueError(f"Invalid SD observation in {header}")
-                if field == "outHumidity" and value > 100:
-                    raise ValueError("Invalid SD humidity")
-                if field == "windDir" and value > 360:
-                    raise ValueError("Invalid SD wind direction")
-            record[field] = value
-        if all(record[field] is None for field, _, _ in FIELDS.values()):
+        if stamp not in missing:
             continue
-        record["_source_file"] = name
-        record["_logged_at"] = epoch
-        records.append(record)
-    return records
+        local = datetime.fromtimestamp(epoch, zone)
+        if local.strftime("%Y-%m-%d %H:%M") != raw["Time"]:
+            continue
+        if local.strftime("%Y%m") != name[:6]:
+            raise ValueError("SD record date does not match its file month")
+        values = {}
+        for field, (header, unit, target, group) in columns.items():
+            if raw[header] in ("", "--"):
+                continue
+            try:
+                value = weewx.units.convert((float(raw[header]), unit, group), target)[0]
+            except KeyError as error:
+                raise ValueError(f"Unsupported units in {header}") from error
+            if (
+                not math.isfinite(value)
+                or (field != "outTemp" and value < 0)
+                or value > UPPER_LIMITS.get(field, math.inf)
+            ):
+                raise ValueError(f"Invalid SD observation in {header}")
+            values[field] = value
+        if values:
+            yield {
+                "dateTime": stamp,
+                "usUnits": weewx.METRICWX,
+                "interval": INTERVAL // 60,
+                "_source_file": name,
+                "_logged_at": epoch,
+                **values,
+            }
 
 
 def missing_intervals(manager, now):
@@ -116,17 +120,13 @@ def missing_intervals(manager, now):
     return set(range(start, stop + 1, INTERVAL)) - existing
 
 
-def plan_recovery(missing, snapshots):
-    candidates, conflicts = {}, set()
+def plan_recovery(snapshots):
+    candidates = {}
     for records in snapshots:
         for record in records:
             stamp = record["dateTime"]
-            if stamp not in missing:
-                continue
-            if stamp in candidates:
-                conflicts.add(stamp)
-            candidates[stamp] = record
-    return [candidates[stamp] for stamp in sorted(candidates.keys() - conflicts)]
+            candidates[stamp] = None if stamp in candidates else record
+    return [record for _, record in sorted(candidates.items()) if record is not None]
 
 
 class RecoveryManager(weewx.manager.DaySummaryManager):
@@ -183,16 +183,9 @@ def run(config, *, dry_run=False):
     database = manager_dict["database_dict"]
     if database["driver"] != "weedb.sqlite" or manager_dict["table_name"] != "archive":
         raise ValueError("SD recovery requires the pilot SQLite archive")
-    origin = "http://" + config["EcowittHttp"]["ip_address"]
-    address = urlsplit(origin)
-    if (
-        not address.hostname
-        or address.username
-        or address.password
-        or address.path
-        or address.query
-        or address.fragment
-    ):
+    host = config["EcowittHttp"]["ip_address"]
+    address = urlsplit(f"//{host}")
+    if not address.hostname or address.username is not None or address.netloc != host:
         raise ValueError("Explicit gateway host configuration is required")
     station = load_station()
     zone = ZoneInfo(station["timezone"])
@@ -213,17 +206,17 @@ def run(config, *, dry_run=False):
         if manager.first_timestamp is None or current["deployment"]["dataset_id"] != f"pilot-{manager.first_timestamp}":
             raise ValueError("Recovery archive does not match the published pilot dataset")
         missing = missing_intervals(manager, time.time())
-        months = {datetime.fromtimestamp(stamp, zone).strftime("%Y%m") for stamp in missing}
-        records, failures = [], []
-        if months:
-            records, failures = read_candidates(origin, address.hostname, months, missing, zone, cache)
+        records, failures = read_candidates(host, address.hostname, missing, zone, cache)
         inserted = 0 if dry_run else apply_recovery(manager, records)
         return {"candidates": len(records), "inserted": inserted, "failed_files": failures, "dry_run": dry_run}
 
 
-def read_candidates(origin, hostname, months, missing, zone, cache):
-    info = json.loads(download(origin + "/get_sdmmc_info"))
-    if info.get("sd_status") != "normal" or int(info["info"]["Interval"]) != 5:
+def read_candidates(host, hostname, missing, zone, cache):
+    if not missing:
+        return [], []
+    months = {datetime.fromtimestamp(stamp, zone).strftime("%Y%m") for stamp in missing}
+    info = json.loads(download(f"http://{host}/get_sdmmc_info"))
+    if info.get("sd_status") != "normal" or int(info["info"]["Interval"]) != INTERVAL // 60:
         raise ValueError("A healthy SD card with five-minute logging is required")
     snapshots, failures = {}, []
     downloaded = 0
@@ -241,14 +234,13 @@ def read_candidates(origin, hostname, months, missing, zone, cache):
             # The first header/data lines identify one append-only log generation.
             prefix = b"\n".join(body.splitlines()[:2])
             cache_name = name[:-4] + "-" + hashlib.sha256(prefix).hexdigest()[:16] + ".csv"
-            parsed = sd_records(cache_name, body, zone)
-            if any(datetime.fromtimestamp(row["_logged_at"], zone).strftime("%Y%m") != name[:6] for row in parsed):
-                raise ValueError("SD record date does not match its file month")
             cached = cache / cache_name
-            if cached.exists() and not body.startswith(cached.read_bytes()):
+            previous = cached.read_bytes() if cached.exists() else b""
+            if not body.startswith(previous):
                 raise ValueError("Previously validated SD history was rewritten or truncated")
-            if not cached.exists() or cached.stat().st_size != len(body):
-                temporary = cache / (cache_name + ".tmp")
+            parsed = list(sd_records(cache_name, body, zone, missing))
+            if body != previous:
+                temporary = cached.with_suffix(".tmp")
                 temporary.write_bytes(body)
                 temporary.replace(cached)
             snapshots[name] = parsed
@@ -256,7 +248,7 @@ def read_candidates(origin, hostname, months, missing, zone, cache):
             log.error("SD file %s could not be validated: %s", name, error)
             failures.append(name)
     failed_months = {name[:6] for name in failures}
-    records = plan_recovery(missing, (rows for name, rows in snapshots.items() if name[:6] not in failed_months))
+    records = plan_recovery(rows for name, rows in snapshots.items() if name[:6] not in failed_months)
     return records, failures
 
 

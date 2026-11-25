@@ -32,36 +32,19 @@ def station_timezone(monkeypatch):
 
 def sd_file(rows):
     stream = io.StringIO()
-    headers = [
-        "Time",
-        "Timestamp",
-        "Outdoor Temperature(°F)",
-        "Outdoor Humidity(%)",
-        "Wind(mph)",
-        "Gust(mph)",
-        "Wind Direction(deg)",
-        "Solar Rad(W/m2)",
-    ]
-    writer = csv.DictWriter(stream, headers)
+    fields = {
+        "Outdoor Temperature(°F)": "68",
+        "Outdoor Humidity(%)": "45",
+        "Wind(mph)": "10",
+        "Gust(mph)": "15",
+        "Wind Direction(deg)": "180",
+        "Solar Rad(W/m2)": "316.81",
+    }
+    writer = csv.DictWriter(stream, ["Time", "Timestamp", *fields])
     writer.writeheader()
     for stamp, overrides in rows:
-        row = dict(
-            zip(
-                headers,
-                [
-                    datetime.fromtimestamp(stamp, ZONE).strftime("%Y-%m-%d %H:%M"),
-                    stamp + 26,
-                    "68",
-                    "45",
-                    "10",
-                    "15",
-                    "180",
-                    "316.81",
-                ],
-                strict=True,
-            )
-        )
-        writer.writerow(row | overrides)
+        timestamp = datetime.fromtimestamp(stamp, ZONE).strftime("%Y-%m-%d %H:%M")
+        writer.writerow({"Time": timestamp, "Timestamp": stamp + 26} | fields | overrides)
     return stream.getvalue().encode()
 
 
@@ -71,15 +54,15 @@ def record(stamp, temperature=3):
 
 def test_recovery_preserves_existing_rows_units_and_atomic_provenance(tmp_path):
     database = {"driver": "weedb.sqlite", "database_name": str(tmp_path / "archive.sdb")}
-    body = sd_file([(START, {}), (START + 300, {}), (START + 600, {"Outdoor Humidity(%)": "--"})])
+    body = sd_file([(START, {"Wind(mph)": "invalid"}), (START + 300, {}), (START + 600, {"Outdoor Humidity(%)": "--"})])
     with weewx.manager.DaySummaryManager.open_with_create(
         database, schema=weewx.schemas.wview_extended.schema
     ) as collector:
         collector.addRecord([record(START), record(START + 1200)])
     with recover.RecoveryManager.open(database) as manager:
         original = manager.getRecord(START)
-        samples = recover.sd_records("202611A.csv", body, ZONE)
-        planned = recover.plan_recovery(recover.missing_intervals(manager, START + 3600), [samples])
+        missing = recover.missing_intervals(manager, START + 3600)
+        planned = recover.plan_recovery([recover.sd_records("202611A.csv", body, ZONE, missing)])
         assert [row["dateTime"] for row in planned] == [START + 300, START + 600]
         # A live record arriving after planning must win the insert race.
         with weewx.manager.DaySummaryManager.open(database) as collector:
@@ -96,10 +79,11 @@ def test_recovery_preserves_existing_rows_units_and_atomic_provenance(tmp_path):
         assert manager.getRecord(START) == original
         assert manager.getRecord(START + 300)["outTemp"] == 7
         assert list(manager.genSql("SELECT * FROM canones_recovery")) == [(START + 600, START + 626, "202611A.csv")]
-        assert recover.plan_recovery(recover.missing_intervals(manager, START + 3600), [samples]) == []
+        missing = recover.missing_intervals(manager, START + 3600)
+        assert not list(recover.sd_records("202611A.csv", body, ZONE, missing))
 
         # A provenance insert failure must also roll back the archive and summary writes.
-        candidate = recover.sd_records("202611A.csv", sd_file([(START + 900, {})]), ZONE)[0]
+        candidate = next(recover.sd_records("202611A.csv", sd_file([(START + 900, {})]), ZONE, missing))
         with weedb.Transaction(manager.connection) as cursor:
             cursor.execute("INSERT INTO canones_recovery VALUES (?, ?, ?)", (START + 900, START + 926, "existing.csv"))
         span = TimeSpan(START - 1, START + 1200)
@@ -109,30 +93,21 @@ def test_recovery_preserves_existing_rows_units_and_atomic_provenance(tmp_path):
         assert weewx.xtypes.get_aggregate("outTemp", span, "count", manager)[0] == before
 
 
-def test_recovery_leaves_ambiguous_timestamps_missing(tmp_path):
-    database = {"driver": "weedb.sqlite", "database_name": str(tmp_path / "archive.sdb")}
+def test_recovery_leaves_ambiguous_timestamps_missing():
     rows = [
-        (START, {}),
         (START + 480, {}),
         (START + 600, {}),
         (START + 900, {}),
         (START + 1200, {"Time": "2026-11-21 12:30"}),
     ]
     body = sd_file(rows)
-    parsed = recover.sd_records("202611A.csv", body, ZONE)
-    assert [row["dateTime"] for row in parsed] == [START, START + 600, START + 900]
-    with weewx.manager.DaySummaryManager.open_with_create(
-        database, schema=weewx.schemas.wview_extended.schema
-    ) as manager:
-        manager.addRecord([record(START), record(START + 1800)])
-        duplicate = sd_file([(START + 600, {"Solar Rad(W/m2)": "999"})])
-        plan = recover.plan_recovery(
-            recover.missing_intervals(manager, START + 3600),
-            [parsed, recover.sd_records("202611B.csv", duplicate, ZONE)],
-        )
-        assert [row["dateTime"] for row in plan] == [START + 900]
+    missing = set(range(START + 300, START + 1800, 300))
+    parsed = recover.sd_records("202611A.csv", body, ZONE, missing)
+    duplicate = sd_file([(START + 600, {"Solar Rad(W/m2)": "999"})])
+    plan = recover.plan_recovery([parsed, recover.sd_records("202611B.csv", duplicate, ZONE, missing)])
+    assert [row["dateTime"] for row in plan] == [START + 900]
     with pytest.raises(ValueError, match="unsupported SD column"):
-        recover.sd_records("202611A.csv", body.replace(b"Wind(mph)", b"Wind(furlongs/day)"), ZONE)
+        list(recover.sd_records("202611A.csv", body.replace(b"Wind(mph)", b"Wind(furlongs/day)"), ZONE, missing))
 
 
 def test_failed_sd_file_retains_validated_cache_and_defers_its_month(tmp_path, monkeypatch):
