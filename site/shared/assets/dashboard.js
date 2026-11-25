@@ -480,16 +480,23 @@ function renderChart() {
   const seriesMeta = new Map();
   const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
     seriesMeta.set(name, {rows: dataRows, key});
-    let points = 0;
+    const line = state.metric !== "rain";
+    const allSymbols = seasonal || state.period === "day";
+    let hasIsolatedPoints = false;
     const data = dataRows.map((row, index) => {
-      const value = convert(row[key]);
-      if (numeric(value)) points++;
-      return [seasonal ? index : Date.parse(row.at), value];
+      const value = [seasonal ? index : Date.parse(row.at), convert(row[key])];
+      if (line && !allSymbols && numeric(value[1]) &&
+          !numeric(dataRows[index - 1]?.[key]) && !numeric(dataRows[index + 1]?.[key])) {
+        hasIsolatedPoints = true;
+        return {value, symbol: "circle"};
+      }
+      return value;
     });
     return {
       name,
-      type: state.metric === "rain" ? "bar" : "line",
-      showSymbol: seasonal || state.period === "day" || points === 1,
+      type: line ? "line" : "bar",
+      showSymbol: allSymbols || hasIsolatedPoints,
+      symbol: allSymbols ? undefined : "none",
       symbolSize: 4,
       connectNulls: false,
       data,
@@ -543,6 +550,13 @@ function renderChart() {
     renderWindow(visibleWindow(timelineDomain, zoom));
   }
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const seasonLabel = (row) => {
+    if (comparisons.length) return row.label;
+    const days = plottedFields.map(([key]) => row.coverage[key] ?? 0);
+    const status = days.every((count) => count === 0) ? "\n(no data)"
+      : days.some((count) => count < row.expectedDays) ? "\n(partial)" : "";
+    return row.label + status;
+  };
   chart.setOption(
     {
       backgroundColor: "transparent",
@@ -596,8 +610,7 @@ function renderChart() {
         type: seasonal ? "category" : "time",
         min: seasonal ? undefined : timelineDomain.start,
         max: seasonal ? undefined : end,
-        ...(seasonal ? { data: rows.map((row) => row.label +
-          (comparisons.length ? "" : !row.coverage[field] ? "\n(no data)" : row.coverage[field] < row.expectedDays ? "\n(partial)" : "")) } : {}),
+        ...(seasonal ? { data: rows.map(seasonLabel) } : {}),
         axisLine: { lineStyle: { color: "#35433e" } },
         axisTick: { show: false },
         splitLine: { show: false },
