@@ -361,8 +361,7 @@ function renderChart() {
   $("history-subtitle").textContent = state.showStation
     ? `${state.mode === "sample" ? "Sample station history" : "Station history"} · Mountain Time`
     : "Station observations hidden · Mountain Time";
-  $("history-resolution").textContent =
-    seasonal ? "Days with data · partial seasons included" : `${resolution} summaries · archive retained separately`;
+  $("history-resolution").textContent = `${resolution} summaries`;
   const eligible = (daily || seasonal) && ["temperature", "rain"].includes(state.metric);
   const activeControls = eligible ? [...state.controls].filter((key) =>
     !referenceSources[key].rainOnly || state.metric === "rain") : [];
@@ -434,6 +433,7 @@ function renderChart() {
   const hasStationValue = (row) => (showPrimary && numeric(row[field])) ||
     stationExtrema.some(([, key]) => numeric(row[key]));
   const stationPlotted = showPrimary || stationExtrema.length > 0;
+  const description = $("chart-description");
   $("timeline-controls").hidden = seasonal || (!stationPlotted && !referenceHasData);
   if (!stationPlotted && !referenceHasData) {
     describeCoverage();
@@ -452,20 +452,17 @@ function renderChart() {
       },
     });
     $("chart").setAttribute("aria-label", emptyMessage.replace("\n", " "));
-    $("chart-description").textContent = seasonal
-      ? "Completed daily intervals build this view. Partial seasons and missing days are not extrapolated."
-      : "";
+    description.hidden = true;
     return;
   }
   const unit = units()[state.metric];
   const seriesMeta = new Map();
-  let min = Infinity, max = -Infinity;
   const makeSeries = (name, key, color, extra = {}, dataRows = rows) => {
     seriesMeta.set(name, {rows: dataRows, key});
     let points = 0;
     const data = dataRows.map((row, index) => {
       const value = convert(row[key]);
-      if (numeric(value)) { points++; min = Math.min(min, value); max = Math.max(max, value); }
+      if (numeric(value)) points++;
       return [seasonal ? index : Date.parse(row.at), value];
     });
     return {
@@ -641,22 +638,20 @@ function renderChart() {
     true,
   );
   chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
-  const range = min <= max
-    ? `Available values span ${min.toFixed(1)} to ${max.toFixed(1)} ${unit}.`
-    : "No recorded values in this period.";
-  $("chart-description").textContent = seasonal
-    ? `${state.period === "monsoon" ? "Monsoon: June 15–September 30." : "Spring: March–May; summer: June–August; autumn: September–November; winter: December–February."} Means average recorded daily means; lows/highs and gusts are recorded extremes. Rain totals exclude missing days. Hover or tap for day counts; individual days may also be incomplete. No extrapolation or climate normals.`
-    : `${resolution} ${state.metric === "rain" ? "rainfall totals" : state.metric === "wind" ? "average wind and maximum gusts" : state.metric === "temperature" ? (stationMean ? "mean temperature" : "temperature lows and highs") : `average ${label.toLowerCase()}`}. ${range} Gaps represent missing readings.`;
-  if (state.metric === "temperature")
-    $("chart-description").textContent += " Warm colors show highs; cool colors show lows. Station lines are solid; Daymet dashed, Abiquiu dotted, and Albuquerque dash-dot.";
-  if (comparisons.length)
-    $("chart-description").textContent += ` Controls retain their own daily reporting periods.${state.metric === "rain" ? " Reference precipitation includes snow water equivalent; the station series represents rainfall." : ""}${stationPlotted ? "" : ` ${state.showStation ? "No matching station values are available in this view" : "Station observations are hidden"}; only the selected controls are shown.`}`;
-  if (state.metric === "solar")
-    $("chart-description").textContent += " Solar means include nighttime readings. Sun angle, day length, shading, smoke, and clouds affect this light-derived estimate; it is not cloud-cover percentage.";
-  $("chart").setAttribute(
-    "aria-label",
-    `${state.showStation ? stationName + (comparisons.length ? " and reference" : "") : "Reference history"} ${label.toLowerCase()} chart. ${range}`,
-  );
+  const notes = [];
+  if (seasonal) notes.push("Summaries use reported days. Hover or tap to see coverage.");
+  if (state.metric === "rain" && referenceHasData)
+    notes.push("Reference precipitation can include melted snow.");
+  if (state.metric === "solar") notes.push("Solar averages include nighttime readings.");
+  description.textContent = notes.join(" ");
+  description.hidden = !notes.length;
+  const sources = stationPlotted
+    ? stationName + (referenceHasData ? " and selected references" : "")
+    : "selected references";
+  const measurement = state.metric === "temperature"
+    ? (stationMean ? "mean temperature" : "temperature lows and highs")
+    : label.toLowerCase();
+  $("chart").setAttribute("aria-label", `${resolution} ${measurement} chart for ${sources}`);
 }
 async function load({ refresh = false } = {}) {
   const id = ++requestId;
