@@ -40,45 +40,37 @@ disabled until mapping is verified; exclude indoor and garage temperatures.
 
 ## Outages and recovery
 
-The GW3000 has an SD card configured for five-minute logging, matching the
-WeeWX archive interval. This is separate from WeeWX's 20-second live polling.
-The card provides another local copy of sensor readings while the gateway has
-power and receives them; it cannot recover periods before recording began or
-while the gateway itself was unavailable. Retain the permanent WeeWX archive
-and its off-device backups independently.
+The GW3000's SD card logs every five minutes, matching the WeeWX archive interval;
+WeeWX polls live data every 20 seconds. The card records independently of the Pi
+while the gateway has power and receives sensor data. It cannot recover readings
+from before recording began or while power or reception was lost. Retain the
+permanent WeeWX archive and off-device backups independently.
 
-The pilot generates archive records in software and explicitly sets
-`no_catchup = True`. Installing a card does not automatically backfill WeeWX.
-The pinned driver supports SD-card startup catch-up, but it starts after the
-last archived timestamp; it does not repair older holes followed by later
-archive records.
+The pilot uses software archive generation with `no_catchup = True`, so SD data
+is not imported automatically. The pinned driver's startup catch-up retrieves
+records after the last archived timestamp; older holes require separate recovery.
 
-Before enabling catch-up or importing files, validate recovery against a copy
-of the archive. Keep the original CSV files and their unit headers, local time
-labels, epoch timestamps, sensor provenance, and logging interval. Check for
-restarts, irregular interval boundaries, and uncovered periods. Equal logging
-intervals do not establish that SD readings and software archive aggregates are
-equivalent.
+Validate recovery against an archive copy before enabling catch-up or importing
+files. Preserve original CSV files, units, local and epoch timestamps, sensor
+provenance, and logging interval. Check clock changes, irregular boundaries,
+missing coverage, and aggregation differences; equal intervals do not establish
+that SD readings and WeeWX aggregates are equivalent.
 
-The live-packet solar correction divides by 126.7 because the driver normalizes
-live light readings to lux. SD files can already contain solar radiation in
-W/m²; applying that same correction to these recovered records would make them
-incorrect. Recovery needs source-appropriate calibration and validated rain
-counter handling before it is enabled. Preserve the pilot's unverified status;
-recovery does not verify sensor mapping or authorize weather-network uploads.
+The live solar correction divides the driver's lux values by 126.7. SD files can
+already contain W/m², so that correction would make recovered irradiance wrong.
+Recovery requires source-appropriate calibration and rain counter handling while
+preserving the pilot's unverified provenance and disabled weather-network uploads.
 
-SD files are listed through the gateway HTTP API and downloaded on TCP port 81.
-Access to the gateway's web interface on port 80 does not by itself provide
-access to the download port. The Pi can retrieve files over its local LAN
-connection without adding another remote firewall rule. See the
+The driver lists SD files through the gateway HTTP API on port 80 and downloads
+them on TCP port 81. The Pi can retrieve them over the LAN when remote firewall
+rules allow only port 80. See the
 [GW3000 SD-card manual](https://oss.ecowitt.net/uploads/20260320/GW3000Manual.pdf#page=72)
 and the [pinned driver's catch-up implementation](https://github.com/weewx-contrib/weewx-ecowitt_local_http/blob/6876b2ecbab88f825dde1b0b7c5874cb5fd3c25e/bin/user/ecowitt_http.py).
 
-Local collection must continue during internet outages when the Pi, gateway,
-sensor reception, and LAN remain available. A WAN interruption can delay
-publishing without causing missing local archive records. Compare the archive,
-export observation timestamps, collector logs, and publisher logs before
-attributing a chart gap to internet connectivity.
+During internet outages, collection should continue while the Pi, gateway, LAN,
+and sensor reception remain available. Compare archive and export observation
+timestamps with collector and publisher logs to distinguish collection gaps from
+delayed uploads.
 
 ## Commissioning
 
