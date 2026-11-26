@@ -3,12 +3,13 @@
 Reference history compares weather across locations: for example, Albuquerque's
 monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
-Choose **Compare stations** to open the source picker. Selecting a source from
-24h or an incompatible view opens 7d for hourly data or 30d for daily data.
+Choose a reference under **Chart sources**. Selecting a source from 24h or an
+incompatible view opens 7d for hourly data or 30d for daily data.
 Bodega Marine and Valles Caldera offer hourly temperature highs and lows,
 precipitation, relative humidity, and solar irradiance. Daily sources also work
 in 1yr, All history, Seasons, and Monsoon. The 24h five-minute view shows the
-station. The picker keeps source selections across presets.
+station. Selected sources stay checked across presets. Use **Open 7d** or
+**Open 30d** to return to a view that can plot a selected source.
 Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station

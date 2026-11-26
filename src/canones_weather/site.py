@@ -55,7 +55,13 @@ def source_option(key, name, place, url, color, dashes=(), *, metrics=None, hour
     attributes = f'data-control="{key}" data-metrics="{metrics}"' if metrics else "checked"
     if hourly:
         attributes += f' data-hourly-metrics="{" ".join(hourly)}"'
-    status = f'<span class="source-status" id="{input_id}-status" hidden>No data</span>' if metrics else ""
+    status = (
+        '<span class="source-state">'
+        f'<span class="source-status" id="{input_id}-status" hidden></span>'
+        f'<button type="button" class="source-open" id="{input_id}-open" hidden></button></span>'
+        if metrics
+        else ""
+    )
     return (
         f'<span class="reference-option" data-color="{color}" data-pattern="{pattern}" '
         f'style="--source-color: {color}; --source-swatch: {swatch}">'
