@@ -324,6 +324,13 @@ function resetViewport() {
   state.viewport = null;
   $("timeline-dates").open = false;
 }
+function resetPresetSources() {
+  const cadence = chartCadence();
+  const chosen = references.filter((source) => source.selected);
+  for (const source of chosen) source.selected = supportsMetric(source, cadence);
+  if (chosen.length && !chosen.some((source) => source.selected))
+    state.showStation = stationInput.checked = true;
+}
 function restoreChartLink() {
   const query = new URLSearchParams(location.search);
   const options = {
@@ -349,7 +356,9 @@ function restoreChartLink() {
 function chartLink() {
   const {period, metric, units, mode, showStation, viewport} = state;
   const query = new URLSearchParams({period, metric, units, mode});
-  for (const source of references) if (source.selected) query.append("source", source.key);
+  const cadence = chartCadence();
+  for (const source of references)
+    if (source.selected && supportsMetric(source, cadence)) query.append("source", source.key);
   if (!showStation) query.set("station", "0");
   if (numeric(viewport?.from) && numeric(viewport?.to)) {
     query.set("from", new Date(viewport.from).toISOString());
@@ -533,12 +542,13 @@ function renderChart() {
     hasReferenceOptions ||= Boolean(preset);
     input.disabled = !preset && !source.selected;
     input.checked = source.selected;
+    input.labels[0].title = preset && !eligible && !source.selected ? `Opens the ${referencePeriods[preset]} view` : "";
     open.hidden = !preset || eligible || !source.selected;
     if (!open.hidden) {
-      open.textContent = `Open ${referencePeriods[preset]}`;
-      open.setAttribute("aria-label", `${open.textContent} for ${source.name}`);
+      open.title = `Open ${referencePeriods[preset]} for ${source.name}`;
+      open.setAttribute("aria-label", open.title);
     }
-    sourceStatus(source, eligible || !open.hidden ? "" : preset ? `Opens ${referencePeriods[preset]}` : "No data");
+    sourceStatus(source, preset ? "" : "No data");
     if (active) {
       activeSources.push(source);
       loadReference(source, cadence);
@@ -911,11 +921,14 @@ for (const group of ["metric", "period", "units", "mode"]) {
         state.metric = "rain";
         selected("metric", state.metric);
       }
+      if (group === "period") resetPresetSources();
+      if (group === "mode") loadMode();
+      else {
+        selected(group, state[group]);
+        if (group === "units") renderCurrent();
+        renderChart();
+      }
       syncChartLink();
-      if (group === "mode") return loadMode();
-      selected(group, state[group]);
-      if (group === "units") renderCurrent();
-      renderChart();
     });
 }
 async function loadReference(source, cadence, options = {maxAge: Infinity}) {

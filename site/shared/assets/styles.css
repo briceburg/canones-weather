@@ -987,7 +987,8 @@ p {
   .map-pin { border: 2px solid LinkText; }
 }
 .source-state { grid-column: 3; text-align: end; }
-.source-open { padding: 2px 0; border: 0; background: none; color: var(--text); font-size: .72rem; text-decoration: underline; }
+.source-open { width: 24px; height: 24px; padding: 0; border: 0; background: none; color: var(--muted); }
+.source-open:hover { color: var(--text); }
 .source-footer { display: flex; flex-wrap: wrap; column-gap: 12px; }
 @media (max-width: 29rem) {
   .reference-option { grid-template-columns: 18px 25px minmax(0, 1fr); }

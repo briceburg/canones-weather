@@ -58,7 +58,7 @@ def source_option(key, name, place, url, color, dashes=(), *, metrics=None, hour
     status = (
         '<span class="source-state">'
         f'<span class="source-status" id="{input_id}-status" hidden></span>'
-        f'<button type="button" class="source-open" id="{input_id}-open" hidden></button></span>'
+        f'<button type="button" class="source-open" id="{input_id}-open" hidden>↗</button></span>'
         if metrics
         else ""
     )

@@ -203,21 +203,22 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.equal(initial.resolution, "Five-minute observations");
     assert.deepEqual(initial.series, ["Secco Spring · temperature"]);
     assert.deepEqual(historyRequests(), ["/feed/history/recent.json"]);
-    assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "Opens 30d");
+    assert(await evaluate('document.getElementById("reference-charleston-status").hidden'));
     await click('[data-control="charleston"]');
     await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
     assert.equal(new URL(await address()).searchParams.get("period"), "month");
+    await click("#show-station-history");
     await click('[data-period="day"]');
-    assert(await evaluate('document.getElementById("reference-charleston").checked'));
-    assert.equal(await evaluate('document.getElementById("reference-charleston-open").textContent'), "Open 30d");
-    await click("#reference-charleston-open");
-    await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
-    await click('[data-control="charleston"]');
-    await click('[data-period="day"]');
-    assert.equal(await evaluate('document.getElementById("reference-bodega-status").textContent'), "Opens 7d");
+    await waitFor(view, (v) => v?.resolution === "Five-minute observations" && v.series.some((name) => name.startsWith("Secco Spring")));
+    assert(!await evaluate('document.getElementById("reference-charleston").checked'));
+    assert(!new URL(await address()).searchParams.has("source"));
     await click('[data-control="bodega"]');
     await waitFor(view, (v) => v?.resolution === "Hourly summaries" && v.series.some((name) => name.startsWith("Bodega")));
-    assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "Opens 30d");
+    await click('[data-control="charleston"]');
+    await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
+    await click('[data-period="week"]');
+    assert.deepEqual(new URL(await address()).searchParams.getAll("source"), ["bodega"]);
+    assert(!await evaluate('document.getElementById("reference-charleston").checked'));
     await click('[data-control="charleston"]');
     await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
     await setDates(dates);
@@ -300,6 +301,8 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     await click("#show-station-history");
     await click('[data-metric="solar"]');
     assert.equal(await view(), null);
+    assert.equal(await evaluate('document.getElementById("reference-bodega-open").title'), "Open 7d for Bodega Marine");
+    assert(!new URL(await address()).searchParams.has("source"));
     await click('[data-metric="temperature"]');
     assert.deepEqual((await view()).bounds, dates);
     await click("#show-station-history");
@@ -352,7 +355,10 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.deepEqual(sampleView.bounds, [anchor - DAY, anchor]);
     assert.equal(sampleView.resolution, "Five-minute observations");
     await click('[data-period="month"]');
-    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Sample station") && name.endsWith("high")));
+    await click('[data-control="bodega"]');
+    await click('[data-control="valles-caldera"]');
+    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Sample station") && name.endsWith("high")) &&
+      v.series.some((name) => name.startsWith("Bodega Marine")));
     assert.match(await evaluate('document.getElementById("control-note").textContent'),
       /Bodega Marine · through Aug 14, 2026/);
     failSampleCurrent = true;
