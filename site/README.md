@@ -53,6 +53,9 @@ UTC. Short-range chart labels and tooltips show weekdays in Mountain Time.
 A custom window retains its dates across measurement changes, unit changes, and
 feed refreshes.
 Select a period or data mode to reset it.
+Use **Copy chart link** to share the measurement, data mode, units, sources, and
+period. Presets open relative to the latest chart cutoff. Custom date ranges
+keep their selected dates in the link.
 
 The heading's clock uses the visitor's device time, displayed in the configured
 station time zone. It is independent of observation timestamps.
@@ -103,9 +106,10 @@ The sample generator uses only Python's standard library.
 
 The chart-source checkboxes select station observations and references under
 Regional, Coastal, and Places of Excellence in Sample or Live mode.
-The chart starts with station observations. Reference availability depends on
-the measurement and the chart's hourly or daily resolution.
-Selections persist in other views. Hide station observations for a reference-only
+The chart starts with station observations. Selecting a reference that needs a
+different resolution opens 7d for hourly observations or 30d for daily
+summaries. A source without the chosen measurement shows **No data**.
+Selections persist across presets. Hide station observations for a reference-only
 chart. The picker swatches match each source's chart color and dash pattern.
 Temperature highs use a heavier line and lows use a lighter line in the same
 color. Each source's map pin opens its station location. The

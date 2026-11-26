@@ -69,6 +69,9 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     "/references/valles-caldera.json": {
       ...reference, source: {...reference.source, id: "valles-caldera"},
     },
+    "/references/charleston.json": {
+      ...reference, source: {...reference.source, id: "charleston"},
+    },
   };
   for (const cadence of cadences)
     fixture[`/feed/history/${cadence}.json`] = {...sample[cadence], kind: "live", deployment};
@@ -143,6 +146,9 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       window.setInterval = (callback, period) => period === 300000
         ? (window.refreshFeed = callback) : schedule(callback, period);
       window.chartInstance = () => window.echarts?.getInstanceByDom(document.getElementById("chart"));
+      Object.defineProperty(navigator, "clipboard", {value: {
+        writeText: async (link) => { window.copiedChartLink = link; },
+      }});
     `});
     await call("Page.navigate", {url: origin});
     await waitFor(() => evaluate('document.getElementById("temperature")?.textContent'), (text) => text && text !== "—");
@@ -193,6 +199,20 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.equal(initial.resolution, "Five-minute observations");
     assert.deepEqual(initial.series, ["Secco Spring · temperature"]);
     assert.deepEqual(historyRequests(), ["/feed/history/recent.json"]);
+    assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "Opens 30d");
+    await click('[data-control="charleston"]');
+    await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
+    await click('[data-control="charleston"]');
+    await click('[data-period="day"]');
+    assert.equal(await evaluate('document.getElementById("reference-bodega-status").textContent'), "Opens 7d");
+    await click('[data-control="bodega"]');
+    await waitFor(view, (v) => v?.resolution === "Hourly summaries" && v.series.some((name) => name.startsWith("Bodega")));
+    assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "Opens 30d");
+    await click('[data-control="charleston"]');
+    await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
+    await click('[data-control="charleston"]');
+    await click('[data-control="bodega"]');
+    await click('[data-period="day"]');
     const labels = await evaluate(`(() => {
       const option = window.chartInstance().getOption();
       const series = option.series[0];
@@ -272,7 +292,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     const hourly = await waitFor(view, (v) =>
       v?.series.some((name) => name.startsWith("Bodega")) && v.series.some((name) => name.startsWith("Valles Caldera")));
     assert.deepEqual(hourly.bounds, [now + HOUR - 7 * DAY, now + HOUR]);
-    assert(await evaluate('document.querySelector("[data-control=santa-fe]").matches(":disabled")'));
+    assert(!await evaluate('document.querySelector("[data-control=santa-fe]").disabled'));
     assert.match(await evaluate('document.getElementById("control-note").textContent'), /Bodega Marine .*delayed/);
     fixture["/references/hourly/valles-caldera.json"] = {};
     await evaluate('window.previewNow += 900000; window.refreshFeed();');
@@ -324,9 +344,21 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       (text) => text === "Sample current observations could not be loaded.");
     const sampleWithoutCurrent = await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Sample station")));
     assert.deepEqual(sampleWithoutCurrent.bounds, [anchor - 30 * DAY, anchor]);
+
+    await click('[data-metric="rain"]');
+    await click('[data-units="metric"]');
+    await click("#show-station-history");
+    await setDates(dates);
+    await click("#copy-chart-link");
+    const link = await waitFor(() => evaluate("window.copiedChartLink"), Boolean);
+    assert.equal(new URL(link).hash, "#history");
     await call("Emulation.setDeviceMetricsOverride", {width: 320, height: 900, deviceScaleFactor: 1, mobile: true});
     await call("Emulation.setTouchEmulationEnabled", {enabled: true});
-    await waitFor(view, (chart) => chart?.x[1] < 320);
+    await call("Page.navigate", {url: link});
+    const shared = await waitFor(view, (v) => v?.series.some((name) => name === "Bodega Marine · precipitation"));
+    assert.deepEqual(shared.bounds, dates);
+    assert(!shared.series.some((name) => name.startsWith("Sample station")));
+    assert(await evaluate('document.querySelector(\'[data-units="metric"][aria-pressed="true"]\') !== null'));
     await evaluate('document.getElementById("chart").scrollIntoView({block: "center", behavior: "instant"})');
     const {x, y} = await view();
     await call("Input.dispatchTouchEvent", {type: "touchStart", touchPoints: [{x: x[1], y}]});
@@ -338,6 +370,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       return {left, right, width: document.documentElement.clientWidth};
     })()`), Boolean);
     assert(tooltip.left >= 0 && tooltip.right <= tooltip.width);
+
   } finally {
     socket?.close();
     if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
