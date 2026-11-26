@@ -155,15 +155,6 @@ Abiquiu refresh fails without replacing its last published file; peers still ref
 See [ACIS documentation](https://docs.rcc-acis.org/acisws/) and
 [NWS's explanation of archive/preliminary differences](https://www.weather.gov/climateservices/nowdatafaq).
 
-## Example monsoon comparison
-
-For June 15–September 30, all 108 dates are available in each listed source (mm):
-
-| Monsoon | Abiquiu Dam | Albuquerque airport | Gila Hot Springs |
-| --- | --- | --- | --- |
-| 2024 | 143.20 | 97.80 | 229.87 |
-| 2025 | 107.30 | 78.40 | 155.19 |
-
 ## Refreshing controls
 
 NOAA and RCC-ACIS downloads need no credentials. Port de Sóller uses the free

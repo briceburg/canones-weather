@@ -1,7 +1,7 @@
 # Public observation data
 
-The dashboard data contract is version 1. It separates current readings from
-chart history; neither file replaces the permanent WeeWX archive.
+The version 1 public feed contains one current snapshot and three chart history
+snapshots. Keep the permanent WeeWX archive and off-device backups separately.
 
 ## Station identity
 
@@ -70,7 +70,7 @@ snapshots also carry the same `deployment` metadata as `current.json`.
 [The synthetic fixtures](../site/canones/data/sample/history/) use this layout
 with daily summaries beginning in January 2024.
 
-Each row has `at` and these fields:
+Each row includes `at` and the fields below. Use `null` for missing readings.
 
 | Field | Aggregation |
 | --- | --- |
@@ -79,13 +79,12 @@ Each row has `at` and these fields:
 | `wind_speed_m_s` | Mean speed |
 | `wind_gust_m_s` | Maximum observed gust |
 | `rain_mm` | Interval total |
-| `solar_w_m2` | Mean light-derived solar irradiance, including nighttime; optional on older feeds |
-| `temperature_min_c`, `temperature_max_c` | Interval extrema; older hourly snapshots may omit them |
+| `solar_w_m2` | Mean light-derived solar irradiance, including nighttime |
+| `temperature_min_c`, `temperature_max_c` | Interval extrema, included in hourly and daily rows |
 
 Recent timestamps identify five-minute interval ends, matching the archive and
-current observation. Hourly and daily timestamps identify interval starts. Publish only completed history intervals;
-current conditions may be newer. Use WeeWX aggregation for exports; do not
-reconstruct archive records from instantaneous gateway snapshots. Represent
+current observation. Hourly and daily timestamps identify interval starts.
+Publish completed history intervals using WeeWX archive aggregates. Represent
 missing intervals with timestamped rows of `null` values so gaps remain visible
 in plots. The dashboard displays times in the station's time zone.
 
@@ -93,17 +92,9 @@ Pilot history can include documented GW3000 SD samples for missing intervals.
 These samples retain their source and logged timestamps in the private archive.
 See [outages and recovery](station.md#outages-and-recovery) for their coverage
 and aggregation limitations.
-Hourly and daily temperatures include mean, minimum, and maximum; averaging must not discard
-extremes or turn missing rainfall into a dry period.
-
-The chart loads the active cadence, starting with `recent` in 24h and using
-hourly rows in 7d. The longer presets use daily rows. Hourly and daily temperature
-charts show recorded lows and highs.
 The five-minute chart shows the measured temperature of each archive record.
-All history includes the full daily history supplied by the feed.
-Chart windows do not set archive
-retention: retain the full five-minute archive and consistent off-device backups
-independently of these exports.
+Hourly and daily temperature charts show recorded lows and highs. See
+[chart navigation](../site/README.md#charts) for preset and zoom behavior.
 
 ## Serving and freshness
 
@@ -125,11 +116,10 @@ observation retains its original timestamp.
 
 ## Dataset boundaries
 
-Keep pilot and commissioned archives separate. A new archive creates a new dataset
-identity; replacing both JSON files starts the public history for that dataset
-without changing its URLs. The browser discards history whose identity differs
-from the current observation. Retain the pilot archive and a consistent backup
-rather than deleting or relabeling its measurements as verified.
+Keep pilot and commissioned archives separate. Assign a new dataset ID to the
+commissioned archive and publish its four snapshots at the existing URLs.
+The browser uses history matching the current observation's dataset ID. Retain
+the pilot archive and a consistent backup with the original provenance.
 
 ## Seasonal comparisons
 
@@ -155,11 +145,9 @@ nighttime readings. The WS90 measures light and UV, not cloud-cover percentage.
 Clouds, smoke, shading, sun angle, and day length affect the signal. No cloudiness
 percentage or sunshine duration is inferred from it. See [Ecowitt's sensor specifications](https://shop.ecowitt.com/collections/wifi-sensor/products/ws90).
 
-## Historical controls
+## Reference feeds
 
-Separately attributed reference files are served from the configured R2 reference
-feed, independently of the station's current/history pair and website builds.
-They never enter the local archive or weather-network submissions. See
-[reference data](reference-data.md) for source methods, coverage, and refreshes;
-[chart navigation](../site/README.md#charts) for periods and zoom behavior; and
-[publishing and discovery](publishing.md) for network registration and web indexing.
+Observed reference feeds publish independently of station feeds and website
+builds. Keep reference readings separate from the local archive and weather-network
+submissions. See [reference data](reference-data.md) for source methods, coverage,
+and refreshes.

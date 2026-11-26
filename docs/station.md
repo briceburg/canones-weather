@@ -22,10 +22,9 @@ records. Use standard aggregation: average temperatures, vector-aggregated wind
 direction, maximum observed gust, and interval rain totals. Verify field mapping,
 units, timestamps, and gust capture against the gateway observations.
 
-Keep the full archive on the Pi with consistent off-device backups. Publish
-observations and chart summaries every five minutes using the
-[public data contract](data.md), independently of website deployments.
-Preserve the archive regardless of chart resolution or exported history windows.
+Keep the full archive on the Pi with consistent off-device backups. The publisher
+checks for changed public snapshots every five minutes, independently of website
+deployments. See the [public data contract](data.md) for each snapshot's cadence.
 
 ## Sensor mapping
 

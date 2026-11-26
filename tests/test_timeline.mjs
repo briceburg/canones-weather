@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DAY, HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "../site/canones/assets/timeline.js";
 
 test("the live hourly preset ends at now with stale or newly started history", () => {
   const now = Date.UTC(2026, 10, 24, 19, 35);

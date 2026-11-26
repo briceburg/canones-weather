@@ -19,6 +19,3 @@ crash.*.log
 
 # Website build output
 dist/
-
-# Downloaded reference data belongs in ignored cache and R2
-site/canones/data/reference/
