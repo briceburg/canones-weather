@@ -260,6 +260,24 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert((await view()).series.some((name) => name.startsWith("Valles Caldera")));
     await click('[data-period="month"]');
     await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Valles Caldera")));
+    await click('[data-metric="rain"]');
+    assert((await view()).series.every((name) => name.endsWith(" · precipitation")));
+    await click('[data-period="seasons"]');
+    const seasonTooltip = (label) => evaluate(`(() => {
+      const option = window.chartInstance().getOption();
+      const dataIndex = option.xAxis[0].data.indexOf(${JSON.stringify(label)});
+      const entries = option.series.map(({name, data}) => ({
+        value: data[dataIndex], dataIndex, seriesName: name, marker: "",
+      }));
+      return option.tooltip[0].formatter(entries);
+    })()`);
+    const partial = await seasonTooltip("Summer 2026");
+    assert.match(partial, /Secco Spring · total precipitation:/);
+    assert.match(partial, /Bodega Marine · total precipitation:/);
+    assert.match(partial, /class="tooltip-coverage is-partial">82% data coverage/);
+    assert.match(await seasonTooltip("Spring 2026"), /class="tooltip-coverage">100% data coverage/);
+    await click('[data-metric="temperature"]');
+    assert.match(await seasonTooltip("Summer 2026"), /Secco Spring · avg high:.*Bodega Marine · avg low:/);
     await click('[data-period="day"]');
     await click('[data-mode="sample"]');
     const sampleView = await waitFor(view, (v) => v?.domainEnd === anchor);

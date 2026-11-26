@@ -1,7 +1,7 @@
 // Summaries of observed days, not estimates for missing days or climate normals.
 const numeric = (value) => typeof value === "number" && Number.isFinite(value);
 const fields = {
-  temperature_c: "mean", temperature_min_c: "min", temperature_max_c: "max",
+  temperature_c: "mean", temperature_min_c: "mean", temperature_max_c: "mean",
   solar_w_m2: "mean", humidity_pct: "mean", wind_speed_m_s: "mean", wind_gust_m_s: "max", rain_mm: "sum",
 };
 
@@ -41,9 +41,12 @@ export function seasonalRows(daily, monsoon, timeZone) {
     for (const [field, operation] of Object.entries(fields)) {
       const data = values[field];
       result.coverage[field] = data.length;
-      const total = data.reduce((a, b) => a + b, 0);
-      result[field] = !data.length ? null : operation === "min" ? Math.min(...data) :
-        operation === "max" ? Math.max(...data) : operation === "sum" ? total : total / data.length;
+      if (data.length && operation !== "max") {
+        const total = data.reduce((a, b) => a + b, 0);
+        result[field] = operation === "sum" ? total : total / data.length;
+      } else {
+        result[field] = data.length ? Math.max(...data) : null;
+      }
     }
     return result;
   });

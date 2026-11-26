@@ -539,6 +539,15 @@ p {
   width: 100%;
   margin-top: 12px;
 }
+.tooltip-coverage {
+  margin-inline-start: .4em;
+  color: var(--muted);
+  font-size: .8em;
+  white-space: nowrap;
+}
+.tooltip-coverage.is-partial {
+  color: var(--accent);
+}
 .timeline-controls {
   margin-bottom: 12px;
   color: var(--muted);

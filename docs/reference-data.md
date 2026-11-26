@@ -82,15 +82,15 @@ quality-flagged values, and presumed-zero measurements are excluded. Trace
 precipitation remains a flagged zero and is identified in daily tooltips.
 Multiday precipitation is not divided into invented daily totals.
 
-Missing dates stay visible and reduce coverage counts.
+Missing dates stay visible and reduce data coverage.
 Seasonal and monsoon values are calculated separately for each
 source; missing days are never counted as dry or extrapolated into a complete
 season. Totals from different observation windows need not be directly comparable.
 
 Chart legends and tooltips identify each reference source.
 Time-series overlays mark the local archive's `record_started_at`, identifying
-pilot collection separately from verified production. Seasonal categories show
-source-specific day counts instead of implying a precise date on a seasonal bar.
+pilot collection separately from verified production. Seasonal tooltips show
+each measurement's coverage as a percentage of calendar days with reported values.
 The collector must export `record_started_at` for this marker to appear; it is
 never inferred from the oldest point in a rolling window. Imported values never
 enter WeeWX or Wunderground/CWOP submissions.

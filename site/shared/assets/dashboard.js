@@ -163,7 +163,7 @@ const metrics = {
   temperature: {label: "Temperature", field: "temperature_c", convert: temp},
   humidity: {label: "Relative humidity", field: "humidity_pct"},
   wind: {label: "Average wind speed", field: "wind_speed_m_s", convert: speed},
-  rain: {label: "Rainfall", field: "rain_mm", convert: rain},
+  rain: {label: "Precipitation", field: "rain_mm", convert: rain},
   solar: {label: "Solar irradiance", field: "solar_w_m2"},
 };
 
@@ -399,9 +399,11 @@ function renderChart() {
   }
   const showReferences = activeSources.length > 0;
   const loadedSources = activeSources.filter(({feeds}) => feeds[cadence]?.data);
-  const temperatureFields = [["temperature_max_c", "high"], ["temperature_min_c", "low"]];
-  const referenceFields = state.metric === "temperature" ? temperatureFields : [[field, state.metric === "rain" ? "precipitation" : label.toLowerCase()]];
-  const hasReferenceValue = (row) => referenceFields.some(([key]) => numeric(row[key]));
+  const measurementFields = state.metric === "temperature" && !recent ? [
+    ["temperature_max_c", seasonal ? "avg high" : "high"],
+    ["temperature_min_c", seasonal ? "avg low" : "low"],
+  ] : [[field, seasonal && state.metric === "rain" ? "total precipitation" : label.toLowerCase()]];
+  const hasReferenceValue = (row) => measurementFields.some(([key]) => numeric(row[key]));
   // A reference hour must be complete at the live or sample cutoff.
   const cutoff = cadence === "hourly" ? end - HOUR : end;
   const comparisons = loadedSources.flatMap((source) => {
@@ -443,8 +445,7 @@ function renderChart() {
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(endpoints[0].at)} – ${dateFormat.format(endpoints.at(-1).at)}`;
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
-  const stationFields = state.metric === "temperature" && !recent ? temperatureFields : [[field, label.toLowerCase()]];
-  if (state.metric === "wind") stationFields.push(["wind_gust_m_s", "peak gust"]);
+  const stationFields = state.metric === "wind" ? [...measurementFields, ["wind_gust_m_s", "peak gust"]] : measurementFields;
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
   const stationHasData = plottedFields.length > 0;
   function describeCoverage(view) {
@@ -519,7 +520,7 @@ function renderChart() {
   // Color and dash pattern identify the source. Stroke weight and markers distinguish highs and lows.
   const series = plottedFields.map(([key, suffix]) => makeSeries(`${stationName} · ${suffix}`, key, stationStyle));
   for (const {source, rows} of comparisons) {
-    for (const [key, suffix] of referenceFields) {
+    for (const [key, suffix] of measurementFields) {
       if (!rows.some((row) => numeric(row[key]))) continue;
       series.push(makeSeries(`${source.name} · ${suffix}`, key, source, rows));
     }
@@ -584,6 +585,8 @@ function renderChart() {
       },
       tooltip: {
         trigger: "axis",
+        confine: seasonal,
+        extraCssText: seasonal ? "max-width:100%;white-space:normal" : "",
         backgroundColor: "#22302e",
         borderColor: "#43534a",
         textStyle: { color: "#e8ebe4" },
@@ -604,7 +607,14 @@ function renderChart() {
             const value = state.metric === "rain" && row?.precipitation_trace ? "Trace" : numeric(entry.value[1])
               ? entry.value[1].toFixed(state.metric === "rain" && state.units === "us" ? 2 : 1) + " " + unit : "Missing";
             const name = window.echarts.format.encodeHTML(entry.seriesName);
-            return `${entry.marker}${name}: ${value}${seasonal ? ` · ${row?.coverage?.[meta.key] ?? 0}/${row?.expectedDays} days` : row?.field_sources?.[meta.key] === "rcc-acis" ? " · RCC-ACIS supplemental report" : ""}`;
+            const reading = `${entry.marker}${name}: ${value}`;
+            if (seasonal) {
+              const days = row.coverage[meta.key] ?? 0;
+              const percent = Math.round(100 * days / row.expectedDays);
+              const partial = days < row.expectedDays ? " is-partial" : "";
+              return `${reading} <span class="tooltip-coverage${partial}">${percent}% data coverage</span>`;
+            }
+            return reading + (row?.field_sources?.[meta.key] === "rcc-acis" ? " · RCC-ACIS supplemental report" : "");
           }).join("<br>");
         },
         axisPointer: { type: state.metric === "rain" ? "shadow" : "line" },
@@ -667,7 +677,9 @@ function renderChart() {
     chartUpdate,
   );
   const notes = [];
-  if (seasonal) notes.push("Summaries use reported days. Hover or tap to see coverage.");
+  if (seasonal && state.metric === "temperature") notes.push("Highs and lows are averages of the reported daily highs and lows.");
+  if (seasonal && state.metric === "rain") notes.push("Precipitation totals use reported days.");
+  if (seasonal) notes.push("Data coverage counts days with a reported value, including zero, out of the full period.");
   if (state.metric === "rain" && referenceHasData)
     notes.push("Reference precipitation can include melted snow.");
   if (state.metric === "solar") notes.push("Solar averages include nighttime readings.");
@@ -676,7 +688,9 @@ function renderChart() {
   const sources = stationHasData
     ? stationName + (referenceHasData ? " and selected references" : "")
     : "selected references";
-  const measurement = state.metric === "temperature" && !recent ? "temperature lows and highs" : label.toLowerCase();
+  const measurement = state.metric === "temperature" && !recent
+    ? seasonal ? "average daily temperature highs and lows" : "temperature highs and lows"
+    : label.toLowerCase();
   $("chart").setAttribute("aria-label", `${resolution} ${measurement} chart for ${sources}`);
 }
 async function load({ refresh = false } = {}) {
