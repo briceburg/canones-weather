@@ -43,7 +43,7 @@ const stationInput = $("show-station-history");
 const stationStyle = sourceStyle(stationInput);
 const referenceInputs = [...document.querySelectorAll("[data-control]")];
 const referenceSources = Object.fromEntries(referenceInputs.map((input) => [input.dataset.control, {
-  name: input.dataset.name,
+  name: input.labels[0].textContent,
   metrics: input.dataset.metrics.split(" "),
   status: $(`${input.id}-status`),
   ...sourceStyle(input),
@@ -599,7 +599,8 @@ function renderChart() {
             const row = meta.rows[entry.dataIndex];
             const value = state.metric === "rain" && row?.precipitation_trace ? "Trace" : numeric(entry.value[1])
               ? entry.value[1].toFixed(state.metric === "rain" && state.units === "us" ? 2 : 1) + " " + unit : "Missing";
-            return `${entry.marker}${entry.seriesName}: ${value}${seasonal ? ` · ${row?.coverage?.[meta.key] ?? 0}/${row?.expectedDays} days` : row?.field_sources?.[meta.key] === "rcc-acis" ? " · RCC-ACIS supplemental report" : ""}`;
+            const name = window.echarts.format.encodeHTML(entry.seriesName);
+            return `${entry.marker}${name}: ${value}${seasonal ? ` · ${row?.coverage?.[meta.key] ?? 0}/${row?.expectedDays} days` : row?.field_sources?.[meta.key] === "rcc-acis" ? " · RCC-ACIS supplemental report" : ""}`;
           }).join("<br>");
         },
         axisPointer: { type: state.metric === "rain" ? "shadow" : "line" },
