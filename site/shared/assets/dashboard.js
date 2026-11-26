@@ -1,6 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
-import { DAY, HOUR, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "./timeline.js";
+import { HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -88,7 +88,7 @@ function zoomTo(view) {
 }
 function moveWindow(direction) {
   const view = currentWindow();
-  const offset = direction * (timelineDomain.daily ? DAY : HOUR);
+  const offset = timelineDomain.daily ? calendarDayOffset(view.from, direction, settings.station.timezone) : direction * HOUR;
   const next = shiftWindow(timelineDomain, view, offset);
   if (next.from !== view.from) zoomTo(next);
 }
@@ -124,10 +124,8 @@ $("timeline-dates-form").addEventListener("submit", (event) => {
 const numeric = (value) => typeof value === "number" && Number.isFinite(value);
 const rounded = (value, decimals = 1) =>
   numeric(value) ? value.toFixed(decimals) : "—";
-const timestamp = (value) =>
-  typeof value === "string" &&
-  /(?:Z|[+-]\d\d:\d\d)$/.test(value) &&
-  Number.isFinite(Date.parse(value));
+const parseTimestamp = (value) =>
+  typeof value === "string" && /(?:Z|[+-]\d\d:\d\d)$/.test(value) ? Date.parse(value) : NaN;
 const temp = (value) =>
   numeric(value) ? (state.units === "us" ? (value * 9) / 5 + 32 : value) : null;
 const speed = (value) =>
@@ -156,9 +154,10 @@ function validEnvelope(data) {
 }
 function validCurrent(data) {
   validEnvelope(data);
+  const observedAt = parseTimestamp(data.observed_at);
   if (
     data.station?.id !== settings.station.id ||
-    !timestamp(data.observed_at) ||
+    !numeric(observedAt) ||
     !data.outdoor ||
     typeof data.outdoor.verified !== "boolean" ||
     typeof data.outdoor.source !== "string"
@@ -177,28 +176,27 @@ function validCurrent(data) {
     if (data.outdoor[field] !== null && !numeric(data.outdoor[field]))
       throw new Error("An observation contains an invalid value.");
   }
-  return data;
+  return {...data, observedAt};
 }
 function validHistory(data) {
   validEnvelope(data);
+  const throughTime = parseTimestamp(data.through);
   if (
     data.station_id !== settings.station.id ||
-    !timestamp(data.through) ||
+    !numeric(throughTime) ||
     !Array.isArray(data.hourly) ||
     !Array.isArray(data.daily) ||
     (data.recent !== undefined && !Array.isArray(data.recent))
   )
     throw new Error("The history feed is incomplete.");
-  for (const series of [data.recent ?? [], data.hourly, data.daily]) {
+  const history = {...data, throughTime, recordStartedAt: parseTimestamp(data.record_started_at)};
+  for (const key of ["recent", "hourly", "daily"]) {
+    if (data[key] === undefined) continue;
     let previous = -Infinity;
-    for (const row of series) {
-      if (
-        !timestamp(row.at) ||
-        Date.parse(row.at) <= previous ||
-        Date.parse(row.at) > Date.parse(data.through)
-      )
-        throw new Error("History timestamps are invalid.");
-      previous = Date.parse(row.at);
+    history[key] = data[key].map((row) => {
+      const at = parseTimestamp(row.at);
+      if (!numeric(at) || at <= previous || at > throughTime) throw new Error("History timestamps are invalid.");
+      previous = at;
       for (const field of [
         "temperature_c",
         "humidity_pct",
@@ -217,9 +215,10 @@ function validHistory(data) {
         )
           throw new Error("History contains an invalid optional value.");
       }
-    }
+      return {...row, at};
+    });
   }
-  return data;
+  return history;
 }
 function validReference(data, key) {
   if (data.schema_version !== 1 || data.kind !== "reference" || data.source?.id !== key ||
@@ -228,9 +227,10 @@ function validReference(data, key) {
       !Number.isFinite(Date.parse(data.start_date)) || !Number.isFinite(Date.parse(data.end_date)))
     throw new Error("Invalid reference metadata");
   let previous = -Infinity;
-  for (const row of data.daily) {
-    if (!timestamp(row.at) || Date.parse(row.at) <= previous) throw new Error("Invalid reference dates");
-    previous = Date.parse(row.at);
+  const daily = data.daily.map((row) => {
+    const at = parseTimestamp(row.at);
+    if (!numeric(at) || at <= previous) throw new Error("Invalid reference dates");
+    previous = at;
     for (const field of ["temperature_min_c", "temperature_max_c", "rain_mm"])
       if (row[field] !== null && !numeric(row[field])) throw new Error("Invalid reference value");
     for (const field of ["humidity_pct", "wind_speed_m_s"])
@@ -239,8 +239,9 @@ function validReference(data, key) {
     if (numeric(row.rain_mm) && row.rain_mm < 0 || numeric(row.temperature_min_c) &&
         numeric(row.temperature_max_c) && row.temperature_min_c > row.temperature_max_c || row.humidity_pct > 100)
       throw new Error("Invalid reference range");
-  }
-  return data;
+    return {...row, at};
+  });
+  return {...data, daily};
 }
 async function readJSON(url, signal) {
   const response = await fetch(url, { signal, cache: "no-cache" });
@@ -305,7 +306,7 @@ function renderCurrent() {
   for (const label of document.querySelectorAll("[data-unit]"))
     label.textContent = ` ${u[label.dataset.unit]}`;
   $("observed-at").textContent = data
-    ? `${data.kind === "sample" ? "Sample observation" : "Observed"} · ${timeFormat.format(new Date(data.observed_at))}`
+    ? `${data.kind === "sample" ? "Sample observation" : "Observed"} · ${timeFormat.format(data.observedAt)}`
     : state.loading
       ? "Connecting to the selected feed…"
       : "No observation available.";
@@ -330,7 +331,7 @@ function renderStatus() {
     status.textContent = state.loading ? "Connecting" : "Unavailable";
     return;
   }
-  const age = (Date.now() - Date.parse(state.current.observed_at)) / 60000;
+  const age = (Date.now() - state.current.observedAt) / 60000;
   const stale = age > settings.stale_after_minutes;
   const clockError = age < -5;
   status.classList.add(stale || clockError ? "stale" : "fresh");
@@ -358,11 +359,11 @@ function renderChart() {
   const daily = !seasonal && usesDailyHistory(days, state.viewport);
   const history = state.history;
   const resolution = seasonal ? "Seasonal" : daily ? "Daily" : "Hourly";
-  const sampleEnd = history?.through ?? state.current?.observed_at;
-  const end = state.mode === "sample" && sampleEnd ? Date.parse(sampleEnd) : Date.now();
+  const sampleEnd = history?.throughTime ?? state.current?.observedAt;
+  const end = state.mode === "sample" && sampleEnd !== undefined ? sampleEnd : Date.now();
   const selectRows = (data) => {
     const selectedRows = (data?.[daily || seasonal ? "daily" : "hourly"] ?? []).filter(
-      (row) => Date.parse(row.at) <= end,
+      (row) => row.at <= end,
     );
     return seasonal ? seasonalRows(selectedRows, state.period === "monsoon", settings.station.timezone) : selectedRows;
   };
@@ -408,7 +409,7 @@ function renderChart() {
       const failed = state.controlErrors.has(key);
       if (!data) return failed ? `${name} could not be loaded. Reselect to retry.` : `Loading ${name}…`;
       const last = data.daily.findLast(hasReferenceValue);
-      const coverage = last ? `through ${dateFormat.format(new Date(last.at))}` : "no values for this measurement";
+      const coverage = last ? `through ${dateFormat.format(last.at)}` : "no values for this measurement";
       return `${name} · ${coverage}${failed ? " (refresh failed)" : ""}`;
     }).join(" | ");
   if (seasonal && comparisons.length) {
@@ -425,10 +426,10 @@ function renderChart() {
   // Each validated series is ordered; only its endpoints are needed for coverage.
   const endpoints = [rows, ...comparisons.map((item) => item.rows)]
     .flatMap((data) => data.length ? [data[0], data.at(-1)] : [])
-    .sort((a, b) => seasonal ? a.start - b.start : Date.parse(a.at) - Date.parse(b.at));
+    .sort((a, b) => seasonal ? a.start - b.start : a.at - b.at);
   $("history-range").textContent = !endpoints.length ? "No history available" : seasonal
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
-    : `Available ${dateFormat.format(new Date(endpoints[0].at))} – ${dateFormat.format(new Date(endpoints.at(-1).at))}`;
+    : `Available ${dateFormat.format(endpoints[0].at)} – ${dateFormat.format(endpoints.at(-1).at)}`;
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
   const stationPrefix = referenceHasData ? `${stationName} · ` : "";
   const temperaturePrefix = stationPrefix || `${resolution} `;
@@ -440,7 +441,7 @@ function renderChart() {
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
   const stationHasData = plottedFields.length > 0;
   function describeCoverage(view) {
-    const inWindow = (row) => !view || (Date.parse(row.at) >= view.from && Date.parse(row.at) <= view.to);
+    const inWindow = (row) => !view || (row.at >= view.from && row.at <= view.to);
     const stationInWindow = rows.some((row) => inWindow(row) && plottedFields.some(([key]) => numeric(row[key])));
     const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
       inWindow(row) && hasReferenceValue(row)));
@@ -484,7 +485,7 @@ function renderChart() {
     const allSymbols = seasonal || state.period === "day";
     let hasIsolatedPoints = false;
     const data = dataRows.map((row, index) => {
-      const value = [seasonal ? index : Date.parse(row.at), convert(row[key])];
+      const value = [seasonal ? index : row.at, convert(row[key])];
       if (line && !allSymbols && numeric(value[1]) &&
           !numeric(dataRows[index - 1]?.[key]) && !numeric(dataRows[index + 1]?.[key])) {
         hasIsolatedPoints = true;
@@ -522,15 +523,15 @@ function renderChart() {
       }, item.rows));
     }
   }
-  if (comparisons.length && stationHasData && !seasonal && timestamp(history?.record_started_at)) {
+  if (comparisons.length && stationHasData && !seasonal && numeric(history?.recordStartedAt)) {
     series[0].markLine = {
       symbol: "none", lineStyle: {color: "#e4b17b", type: "dashed"},
-      data: [{xAxis: Date.parse(history.record_started_at), name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
+      data: [{xAxis: history.recordStartedAt, name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
       label: {formatter: "{b}", color: "#e4b17b", position: "insideEndTop"},
     };
   }
   // Keep the selected dates when switching between hourly and daily records.
-  const first = Math.min(Date.parse(endpoints[0].at), state.viewport?.from ?? Infinity);
+  const first = Math.min(endpoints[0].at, state.viewport?.from ?? Infinity);
   timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), daily};
   const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : timelineRange(timelineDomain, days, state.viewport);
   renderWindow = (view) => {

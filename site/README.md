@@ -41,9 +41,10 @@ Display units do not change stored data; see [the data contract](../docs/data.md
 Live presets end at the visitor's current time and show gaps if observations
 are missing. Sample presets end at the sample timestamp. Drag the timeline
 window to pan without changing its width. Earlier and Later step by an hour
-in hourly views and by a day in daily views. Drag the handles, select across the
-plot, or open Set date range to enter both ends in UTC. Widening a 24h window
-beyond 24 hours switches it to daily summaries and enables compatible references.
+in hourly views and by a station-local calendar day in daily views. Drag the
+handles, select across the plot, or open Set date range to enter both ends in
+UTC. Widening a 24h window beyond 24 hours switches it to daily summaries and
+enables compatible references.
 A custom window retains its dates across measurement changes, unit changes, and
 feed refreshes.
 Select a period or data mode to reset it.
