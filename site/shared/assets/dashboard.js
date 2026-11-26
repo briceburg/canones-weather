@@ -37,11 +37,13 @@ const references = [...document.querySelectorAll("[data-control]")].map((input) 
   daily: input.dataset.metrics.split(" "),
   hourly: input.dataset.hourlyMetrics?.split(" ") ?? [],
   status: $(`${input.id}-status`),
+  open: $(`${input.id}-open`),
   selected: false,
   feeds: {},
   ...sourceStyle(input),
 }));
 const referenceRefresh = {daily: HOUR, hourly: HOUR / 4};
+const referencePeriods = {week: "7d", month: "30d"};
 const hourlyDelay = 3 * HOUR;
 const periodDays = { day: 1, week: HOURLY_PRESET_DAYS, month: 30, year: 365, all: Infinity };
 const seasonalPeriods = ["seasons", "monsoon"];
@@ -78,6 +80,15 @@ function referencePreset(source) {
   if (supportsMetric(source, "hourly")) return "week";
   return supportsMetric(source, "daily") ? "month" : null;
 }
+function sourceStatus({input, status, open}, message) {
+  const description = message ? status.id : open.hidden ? null : open.id;
+  if (status.textContent === message && input.getAttribute("aria-describedby") === description) return;
+  status.textContent = message;
+  status.hidden = !message;
+  status.title = message === "No readings" ? "No readings in this window" : "";
+  if (description) input.setAttribute("aria-describedby", description);
+  else input.removeAttribute("aria-describedby");
+}
 let timelineDomain = null;
 let renderWindow;
 function rememberViewport(event) {
@@ -87,6 +98,8 @@ function rememberViewport(event) {
     const {start, end} = numeric(zoom.start) ? zoom : chart.getOption().dataZoom[0];
     state.viewport = {start, end};
     renderPeriodSelection();
+    renderWindow();
+    scheduleViewportLink();
     return;
   }
   // Plot selection and date entry supply timestamps. The slider and wheel supply percentages.
@@ -95,6 +108,7 @@ function rememberViewport(event) {
     : windowFromPercent(timelineDomain, zoom);
   if (!(view.from < view.to)) return;
   state.viewport = timelineWindow(timelineDomain, periodDays[state.period], view);
+  scheduleViewportLink();
   if (chartCadence(timelineDomain.end) !== timelineDomain.cadence) {
     renderChart();
   } else {
@@ -302,7 +316,7 @@ function renderPeriodSelection() {
   const custom = state.viewport !== null;
   selected("period", custom ? null : state.period);
   $("custom-period").hidden = !custom;
-  $("custom-period").title = custom && !timelineDomain?.seasonal
+  $("custom-period").title = numeric(state.viewport?.from)
     ? `${timeFormat.format(new Date(state.viewport.from))} – ${timeFormat.format(new Date(state.viewport.to))}`
     : "Custom history window";
 }
@@ -324,11 +338,15 @@ function restoreChartLink() {
   const sources = new Set(query.getAll("source"));
   for (const source of references) source.selected = sources.has(source.key);
   state.showStation = stationInput.checked = query.get("station") !== "0";
-  const from = parseTimestamp(query.get("from")), to = parseTimestamp(query.get("to"));
-  if (!seasonalPeriods.includes(state.period) && from < to && from < historyEnd())
-    state.viewport = {from, to};
+  if (seasonalPeriods.includes(state.period)) {
+    const [start, end] = (query.get("zoom") ?? "").split(",").map(Number);
+    if (start >= 0 && start < end && end <= 100) state.viewport = {start, end};
+  } else {
+    const from = parseTimestamp(query.get("from")), to = parseTimestamp(query.get("to"));
+    if (from < to && from < historyEnd()) state.viewport = {from, to};
+  }
 }
-$("copy-chart-link").addEventListener("click", async () => {
+function chartLink() {
   const {period, metric, units, mode, showStation, viewport} = state;
   const query = new URLSearchParams({period, metric, units, mode});
   for (const source of references) if (source.selected) query.append("source", source.key);
@@ -336,18 +354,49 @@ $("copy-chart-link").addEventListener("click", async () => {
   if (numeric(viewport?.from) && numeric(viewport?.to)) {
     query.set("from", new Date(viewport.from).toISOString());
     query.set("to", new Date(viewport.to).toISOString());
-  }
+  } else if (numeric(viewport?.start) && numeric(viewport?.end))
+    query.set("zoom", `${viewport.start.toFixed(4)},${viewport.end.toFixed(4)}`);
   const url = new URL(location.href);
   url.search = query;
   url.hash = "history";
+  return url;
+}
+let chartPointer = null;
+let viewportLinkPending = false;
+let viewportLinkTimer;
+function syncChartLink() {
+  clearTimeout(viewportLinkTimer);
+  viewportLinkPending = false;
+  const url = chartLink();
+  if (url.href !== location.href) window.history.replaceState(window.history.state, "", url);
+  return url;
+}
+function scheduleViewportLink() {
+  viewportLinkPending = true;
+  clearTimeout(viewportLinkTimer);
+  if (chartPointer === null) viewportLinkTimer = setTimeout(syncChartLink, 150);
+}
+$("chart").addEventListener("pointerdown", ({pointerId}) => {
+  chartPointer = pointerId;
+  clearTimeout(viewportLinkTimer);
+});
+for (const event of ["pointerup", "pointercancel"]) window.addEventListener(event, ({pointerId}) => {
+  if (pointerId !== chartPointer) return;
+  chartPointer = null;
+  if (viewportLinkPending) scheduleViewportLink();
+});
+let copyFeedbackTimer;
+$("copy-chart-link").addEventListener("click", async () => {
+  const url = syncChartLink();
   const status = $("chart-link-status");
+  clearTimeout(copyFeedbackTimer);
   try {
     await navigator.clipboard.writeText(url.href);
     status.textContent = "Link copied.";
   } catch {
-    window.history.replaceState(window.history.state, "", url);
     status.textContent = "Link is in the address bar.";
   }
+  copyFeedbackTimer = setTimeout(() => { status.textContent = ""; }, 2500);
 });
 function renderCurrent() {
   const data = currentFeed.data;
@@ -477,17 +526,19 @@ function renderChart() {
   const activeSources = [];
   let hasReferenceOptions = false;
   for (const source of references) {
-    const {input, status} = source;
+    const {input, open} = source;
     const preset = referencePreset(source);
     const eligible = supportsMetric(source, cadence);
     const active = eligible && source.selected;
     hasReferenceOptions ||= Boolean(preset);
-    input.disabled = !preset;
-    input.checked = active;
-    status.hidden = eligible;
-    status.textContent = preset ? (preset === "week" ? "Opens 7d" : "Opens 30d") : "No data";
-    if (status.hidden) input.removeAttribute("aria-describedby");
-    else input.setAttribute("aria-describedby", status.id);
+    input.disabled = !preset && !source.selected;
+    input.checked = source.selected;
+    open.hidden = !preset || eligible || !source.selected;
+    if (!open.hidden) {
+      open.textContent = `Open ${referencePeriods[preset]}`;
+      open.setAttribute("aria-label", `${open.textContent} for ${source.name}`);
+    }
+    sourceStatus(source, eligible || !open.hidden ? "" : preset ? `Opens ${referencePeriods[preset]}` : "No data");
     if (active) {
       activeSources.push(source);
       loadReference(source, cadence);
@@ -510,7 +561,7 @@ function renderChart() {
   const comparisons = selectedReferences.flatMap(({source, rows, last}) =>
     last ? [{source, rows: groupedRows(rows, seasonal)}] : []);
   const controlNote = !hasReferenceOptions ? "No references report this measurement."
-    : !showReferences ? "Choose a station to compare. The picker shows when a station opens a different period."
+    : !showReferences ? "Choose a station to compare."
     : selectedReferences.map(({source: {name}, last, loaded, failed, loading}) => {
       if (!loaded) return loading ? `Loading ${name}…` : `${name} could not be loaded. Reselect to retry.`;
       const coverageEnd = last && last.at + referenceInterval;
@@ -547,17 +598,23 @@ function renderChart() {
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
   const stationHasData = plottedFields.length > 0;
   function describeCoverage(view) {
-    const inWindow = (row) => !view || (row.at >= view.from && row.at <= view.to);
-    const stationInWindow = rows.some((row) => inWindow(row) && plottedFields.some(([key]) => numeric(row[key])));
-    const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
-      inWindow(row) && hasReferenceValue(row)));
+    const [first, last] = seasonal && state.viewport
+      ? [state.viewport.start, state.viewport.end].map((percent) => Math.round(percent * (rows.length - 1) / 100))
+      : [0, rows.length - 1];
+    const inWindow = seasonal ? (_, index) => index >= first && index <= last
+      : (row) => !view || (row.at >= view.from && row.at <= view.to);
+    const stationInWindow = rows.some((row, index) => inWindow(row, index) && plottedFields.some(([key]) => numeric(row[key])));
+    const visibleReferences = new Set(comparisons.filter(({rows}) =>
+      rows.some((row, index) => inWindow(row, index) && hasReferenceValue(row))).map(({source}) => source));
+    for (const {source, loaded, failed} of selectedReferences) {
+      sourceStatus(source, loaded && !visibleReferences.has(source) ? "No readings" : !loaded && failed ? "Unavailable" : "");
+    }
+    const referenceInWindow = visibleReferences.size > 0;
     const subtitle = !referenceInWindow ? stationSubtitle : stationInWindow
       ? `${stationName} + reference history · Mountain Time`
       : `Reference history only · ${state.showStation ? `${stationName} has no readings in this window` : `${stationName} hidden`} · Mountain Time`;
     if ($("history-subtitle").textContent !== subtitle) $("history-subtitle").textContent = subtitle;
-    const status = controlNote + (comparisons.length && !referenceInWindow
-      ? " · No reference observations in this window" : "");
-    if ($("control-note").textContent !== status) $("control-note").textContent = status;
+    if ($("control-note").textContent !== controlNote) $("control-note").textContent = controlNote;
     return stationInWindow || referenceInWindow;
   }
   const description = $("chart-description");
@@ -642,7 +699,7 @@ function renderChart() {
   timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), cadence};
   const view = seasonal ? null : currentWindow();
   const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : {...zoomValues(view), minValueSpan: 1};
-  renderWindow = (view) => {
+  renderWindow = seasonal ? describeCoverage : (view) => {
     const readings = describeCoverage(view);
     const format = daily ? dateFormat : timeFormat;
     const dates = format.formatRange(new Date(view.from), new Date(view.to));
@@ -854,6 +911,7 @@ for (const group of ["metric", "period", "units", "mode"]) {
         state.metric = "rain";
         selected("metric", state.metric);
       }
+      syncChartLink();
       if (group === "mode") return loadMode();
       selected(group, state[group]);
       if (group === "units") renderCurrent();
@@ -871,23 +929,32 @@ stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
   if (seasonalPeriods.includes(state.period)) state.viewport = null;
   renderChart();
+  syncChartLink();
 });
+function openReference(source) {
+  const preset = referencePreset(source);
+  if (preset && !supportsMetric(source, chartCadence())) {
+    state.period = preset;
+    resetViewport();
+  }
+  const cadence = chartCadence();
+  if (supportsMetric(source, cadence))
+    loadReference(source, cadence, {maxAge: referenceRefresh[cadence], retryFailed: true});
+  renderChart();
+  syncChartLink();
+}
 for (const source of references) {
-  const {input} = source;
+  const {input, open} = source;
   input.addEventListener("change", () => {
     if (seasonalPeriods.includes(state.period)) state.viewport = null;
     source.selected = input.checked;
-    if (source.selected) {
-      const preset = referencePreset(source);
-      if (preset && !supportsMetric(source, chartCadence())) {
-        state.period = preset;
-        resetViewport();
-      }
-      const cadence = chartCadence();
-      if (supportsMetric(source, cadence))
-        loadReference(source, cadence, {maxAge: referenceRefresh[cadence], retryFailed: true});
-    }
+    if (source.selected) return openReference(source);
     renderChart();
+    syncChartLink();
+  });
+  open.addEventListener("click", () => {
+    input.focus({preventScroll: true});
+    openReference(source);
   });
 }
 async function activateChart() {

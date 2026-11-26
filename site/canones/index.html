@@ -195,7 +195,15 @@
         >
           <div class="history-heading">
             <div>
-              <h2 id="history-title">A longer view.</h2>
+              <div class="history-title-row">
+                <h2 id="history-title">A longer view.</h2>
+                <div class="chart-share">
+                  <button type="button" id="copy-chart-link" aria-label="Copy chart link" title="Copy chart link">
+                    <span class="copy-icon" aria-hidden="true"></span>
+                  </button>
+                  <span id="chart-link-status" class="chart-link-status" role="status"></span>
+                </div>
+              </div>
               <p id="history-subtitle">
                 Sample history · hourly detail and daily summaries
               </p>
@@ -243,11 +251,6 @@
                 °C / mm
               </button>
             </div>
-          </div>
-          <div class="small chart-actions">
-            <a href="#reference-controls">Compare stations ↓</a>
-            <button type="button" id="copy-chart-link">Copy chart link</button>
-            <span id="chart-link-status" role="status"></span>
           </div>
           <div
             id="chart"

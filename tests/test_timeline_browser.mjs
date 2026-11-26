@@ -49,6 +49,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     cadence, JSON.parse(await read(`data/sample/history/${cadence}.json`)),
   ])));
   const anchor = Date.parse(sample.recent.through);
+  const dates = [Date.UTC(2025, 10, 10, 7), Date.UTC(2025, 10, 15, 7)];
   const current = JSON.parse(await read("data/sample/current.json"));
   const config = JSON.parse(await read("assets/site-config.json"));
   const deployment = {phase: "pilot", dataset_id: "browser-test", notice: "Pilot test observations"};
@@ -70,7 +71,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       ...reference, source: {...reference.source, id: "valles-caldera"},
     },
     "/references/charleston.json": {
-      ...reference, source: {...reference.source, id: "charleston"},
+      ...reference, source: {...reference.source, id: "charleston"}, daily: dailyRows.slice(-30),
     },
   };
   for (const cadence of cadences)
@@ -195,12 +196,21 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       await call("Input.dispatchMouseEvent", {type: "mouseReleased", x: end, y, button: "left", clickCount: 1});
     };
     const initial = await waitFor(view, (v) => v?.series.length);
+    const address = () => evaluate("location.href");
+    const historyLength = await evaluate("window.history.length");
+    assert.equal(new URL(await address()).search, "");
     assert.deepEqual(initial.bounds, [now - DAY, now]);
     assert.equal(initial.resolution, "Five-minute observations");
     assert.deepEqual(initial.series, ["Secco Spring · temperature"]);
     assert.deepEqual(historyRequests(), ["/feed/history/recent.json"]);
     assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "Opens 30d");
     await click('[data-control="charleston"]');
+    await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
+    assert.equal(new URL(await address()).searchParams.get("period"), "month");
+    await click('[data-period="day"]');
+    assert(await evaluate('document.getElementById("reference-charleston").checked'));
+    assert.equal(await evaluate('document.getElementById("reference-charleston-open").textContent'), "Open 30d");
+    await click("#reference-charleston-open");
     await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
     await click('[data-control="charleston"]');
     await click('[data-period="day"]');
@@ -210,6 +220,10 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "Opens 30d");
     await click('[data-control="charleston"]');
     await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.series.some((name) => name.startsWith("Downtown Charleston")));
+    await setDates(dates);
+    await waitFor(address, (url) => Date.parse(new URL(url).searchParams.get("from")) === dates[0]);
+    assert.equal(await evaluate('document.getElementById("reference-charleston-status").textContent'), "No readings");
+    assert(await evaluate('document.getElementById("reference-bodega-status").hidden'));
     await click('[data-control="charleston"]');
     await click('[data-control="bodega"]');
     await click('[data-period="day"]');
@@ -256,6 +270,8 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
         assert(Math.abs(selected.bounds[i] - panned.target[i]) <= panned.msPerPixel,
           `Cycle ${cycle + 1}, expected ${panned.target}, got ${selected.bounds}`);
       }
+      const synced = await waitFor(address, (url) => Math.abs(Date.parse(new URL(url).searchParams.get("from")) - selected.bounds[0]) <= 1);
+      assert(Math.abs(Date.parse(new URL(synced).searchParams.get("to")) - selected.bounds[1]) <= 1);
       await click('[data-metric="rain"]');
       assert.deepEqual((await view()).bounds, selected.bounds);
       await click('[data-metric="temperature"]');
@@ -272,12 +288,14 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       assert(Math.sign(after.bounds[index] - before.bounds[index]) === Math.sign(offset));
     }
 
-    const dates = [Date.UTC(2025, 10, 10, 7), Date.UTC(2025, 10, 15, 7)];
     await setDates(dates);
     assert.deepEqual((await view()).bounds, dates);
+    await waitFor(address, (url) => Date.parse(new URL(url).searchParams.get("from")) === dates[0]);
+    const beforeRefresh = await address();
     await evaluate('window.previewNow += 3600000; window.refreshFeed();');
     const refreshed = await waitFor(view, (v) => v?.domainEnd === now + 3600000);
     assert.deepEqual(refreshed.bounds, dates);
+    assert.equal(await address(), beforeRefresh);
 
     await click("#show-station-history");
     await click('[data-metric="solar"]');
@@ -352,8 +370,11 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     await click("#copy-chart-link");
     const link = await waitFor(() => evaluate("window.copiedChartLink"), Boolean);
     assert.equal(new URL(link).hash, "#history");
+    assert.equal(link, await address());
+    assert.equal(await evaluate("window.history.length"), historyLength);
     await call("Emulation.setDeviceMetricsOverride", {width: 320, height: 900, deviceScaleFactor: 1, mobile: true});
     await call("Emulation.setTouchEmulationEnabled", {enabled: true});
+    await call("Page.navigate", {url: "about:blank"});
     await call("Page.navigate", {url: link});
     const shared = await waitFor(view, (v) => v?.series.some((name) => name === "Bodega Marine · precipitation"));
     assert.deepEqual(shared.bounds, dates);
