@@ -41,9 +41,8 @@ The data feed also includes a measured temperature mean.
 Display units do not change stored data; see [the data contract](../docs/data.md).
 
 Live presets end at the visitor's current time and show gaps if observations
-are missing. Daily charts shade the unfinished local day while its summary is
-pending. Use 24h for today's hourly readings. Sample presets end at the sample
-timestamp. Drag the timeline window to pan without changing its width. Earlier and Later step by an hour
+are missing. Sample presets end at the sample timestamp. Drag the timeline
+window to pan without changing its width. Earlier and Later step by an hour
 in hourly views and by a station-local calendar day in daily views. Drag the
 handles, select across the plot, or open Set date range to enter both ends in
 UTC. Widening a 24h window beyond 24 hours switches it to daily summaries and
