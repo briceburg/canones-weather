@@ -110,8 +110,9 @@ Regional, Coastal, and Places of Excellence in Sample or Live mode.
 The chart starts with station observations. Selecting a reference that needs a
 different resolution opens 7d for hourly observations or 30d for daily
 summaries. A source without the chosen measurement shows **No data**. A loaded
-source with a gap in the visible dates shows **No readings**.
-Selections persist across presets. Hide station observations for a reference-only
+source with a gap in the visible dates shows **No readings**. A preset retains
+the reference selections it can show, and chart links include compatible
+sources. Hide station observations for a reference-only
 chart. The picker swatches match each source's chart color and dash pattern.
 Temperature highs use a heavier line and lows use a lighter line in the same
 color. Each source's map pin opens its station location. The

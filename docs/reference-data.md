@@ -8,8 +8,9 @@ incompatible view opens 7d for hourly data or 30d for daily data.
 Bodega Marine and Valles Caldera offer hourly temperature highs and lows,
 precipitation, relative humidity, and solar irradiance. Daily sources also work
 in 1yr, All history, Seasons, and Monsoon. The 24h five-minute view shows the
-station. Selected sources stay checked across presets. Use **Open 7d** or
-**Open 30d** to return to a view that can plot a selected source.
+station. Choosing a preset clears selections it cannot show. If a measurement
+or range change moves a selected source out of view, the arrow next to it opens
+a compatible period.
 Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
