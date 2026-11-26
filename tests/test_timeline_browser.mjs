@@ -51,11 +51,12 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
   const reference = {
     schema_version: 1, kind: "reference",
     source: {id: "bodega", name: "Bodega Marine test data", type: "observed", elevation_m: 19.2},
-    start_date: "2020-01-01", end_date: sample.through,
+    start_date: "2020-01-01", end_date: new Date(anchor + 7 * DAY).toISOString(),
     daily: [sample.daily.length, 0].flatMap((days) => sample.daily.map((row) => ({
       ...row, at: new Date(Date.parse(row.at) - days * DAY).toISOString(),
     }))),
   };
+  reference.daily.push({...reference.daily.at(-1), at: reference.end_date});
   const fixture = {
     "/assets/site-config.json": config,
     "/feed/current.json": {...current, kind: "live"},
@@ -260,11 +261,46 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert((await view()).series.some((name) => name.startsWith("Valles Caldera")));
     await click('[data-period="month"]');
     await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Valles Caldera")));
+    await click('[data-metric="rain"]');
+    assert((await view()).series.every((name) => name.endsWith(" · precipitation")));
+    await click('[data-period="seasons"]');
+    const seasonTooltip = (label) => evaluate(`(() => {
+      const option = window.chartInstance().getOption();
+      const dataIndex = option.xAxis[0].data.indexOf(${JSON.stringify(label)});
+      const entries = option.series.map(({name, data}) => ({
+        value: data[dataIndex]?.value ?? data[dataIndex], dataIndex, seriesName: name, marker: "",
+      }));
+      return option.tooltip[0].formatter(entries);
+    })()`);
+    const partial = await seasonTooltip("Summer 2026");
+    assert.match(partial, /Secco Spring · total precipitation:/);
+    assert.match(partial, /Bodega Marine · total precipitation:/);
+    assert.match(partial, /class="tooltip-coverage is-partial">82% data coverage/);
+    assert.match(await seasonTooltip("Spring 2026"), /class="tooltip-coverage">100% data coverage/);
+    await click('[data-metric="temperature"]');
+    assert.match(await seasonTooltip("Summer 2026"), /Secco Spring · avg high:.*Bodega Marine · avg low:/);
     await click('[data-period="day"]');
     await click('[data-mode="sample"]');
     const sampleView = await waitFor(view, (v) => v?.domainEnd === anchor);
     assert.deepEqual(sampleView.bounds, [anchor - DAY, anchor]);
     assert.equal(sampleView.resolution, "Five-minute observations");
+    await click('[data-period="month"]');
+    assert.match(await evaluate('document.getElementById("control-note").textContent'),
+      /Bodega Marine · through Aug 14, 2026/);
+    await call("Emulation.setDeviceMetricsOverride", {width: 320, height: 900, deviceScaleFactor: 1, mobile: true});
+    await call("Emulation.setTouchEmulationEnabled", {enabled: true});
+    await waitFor(view, (chart) => chart?.x[1] < 320);
+    await evaluate('document.getElementById("chart").scrollIntoView({block: "center", behavior: "instant"})');
+    const {x, y} = await view();
+    await call("Input.dispatchTouchEvent", {type: "touchStart", touchPoints: [{x: x[1], y}]});
+    await call("Input.dispatchTouchEvent", {type: "touchEnd", touchPoints: []});
+    const tooltip = await waitFor(() => evaluate(`(() => {
+      const tip = document.querySelector('#chart > div[style*="white-space"]');
+      if (!tip?.innerText.includes("Bodega Marine")) return null;
+      const {left, right} = tip.getBoundingClientRect();
+      return {left, right, width: document.documentElement.clientWidth};
+    })()`), Boolean);
+    assert(tooltip.left >= 0 && tooltip.right <= tooltip.width);
   } finally {
     socket?.close();
     if (chrome && chrome.exitCode === null && chrome.signalCode === null) {

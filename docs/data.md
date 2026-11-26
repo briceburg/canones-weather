@@ -131,12 +131,13 @@ spring March–May, summer June–August, autumn September–November, and winte
 December–February. Winter is labeled with both years. Monsoon compares June 15
 through September 30 each year, following [NWS Albuquerque's designated window](https://www.weather.gov/abq/prepawaremonsoonhome). Actual monsoon onset varies.
 
-These views average available daily means, preserve recorded temperature extrema
-and peak gusts, and sum recorded rainfall. Tooltips report days with values for
-the selected measurement against calendar days in the full window. A day with a
-value can itself be incomplete; this is not a measure of archive uptime. Missing
-values stay missing, and partial-season totals are never extrapolated. These are
-observations from this station's dataset, not regional climate normals.
+These views average daily temperature highs and lows separately, average daily
+means for humidity, wind speed, and solar irradiance, retain the peak gust, and
+sum precipitation. Tooltips show coverage as a percentage of calendar days with
+a reported value for each measurement. A reported zero counts toward coverage,
+and a day with a value can itself be incomplete. Missing values stay missing,
+and partial-season totals are never extrapolated. These are observations from
+this station's dataset, not regional climate normals.
 
 Spring wind comparisons use mean daily wind speed and maximum recorded gust.
 Monsoon defaults to rainfall; other measurements remain selectable. Station

@@ -289,8 +289,8 @@ def fetch_hourly_reference(key, *, now=None):
         urls.append(url)
 
     fields = tuple(field for field, _, _ in USCRN_HOURLY_FIELDS)
-    available = [at for at, row in rows.items() if any(row[field] is not None for field in fields)]
-    if not available:
+    latest = max((at for at, row in rows.items() if any(row[field] is not None for field in fields)), default=None)
+    if latest is None:
         raise ValueError("USCRN hourly files contain no recent observations")
     first = min(rows)
     through = max(rows) + HOUR
@@ -315,7 +315,7 @@ def fetch_hourly_reference(key, *, now=None):
         "retrieved_at": now.isoformat(),
         "start_at": first.isoformat(),
         "through": through.isoformat(),
-        "available_through": (max(available) + HOUR).isoformat(),
+        "available_through": (latest + HOUR).isoformat(),
         "hourly": hourly,
     }
 
@@ -400,27 +400,19 @@ def validate_ranges(row):
 
 
 def document(source, rows, start, end):
-    daily = []
+    required = dict.fromkeys(FIELDS.values())
+    fields = (*required, *ADDITIONAL_FIELDS)
+    daily, latest = [], None
     day = start
     while day <= end:
-        daily.append(
-            {
-                "at": datetime.combine(day, time(), ZONE).isoformat(),
-                "temperature_min_c": None,
-                "temperature_max_c": None,
-                "rain_mm": None,
-                **rows.get(day, {}),
-            }
-        )
+        values = rows.get(day, {})
+        validate_ranges(values)
+        if any(values.get(field) is not None for field in fields):
+            latest = day
+        daily.append({"at": datetime.combine(day, time(), ZONE).isoformat(), **required, **values})
         day += timedelta(days=1)
-
-    def has_observation(row):
-        return any(row.get(field) is not None for field in (*FIELDS.values(), *ADDITIONAL_FIELDS))
-
-    if not any(map(has_observation, daily)):
+    if latest is None:
         raise ValueError("Reference download contains no observations")
-    for row in daily:
-        validate_ranges(row)
     return {
         "schema_version": 1,
         "kind": "reference",
@@ -428,7 +420,7 @@ def document(source, rows, start, end):
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
-        "available_through": max(day for day, values in rows.items() if has_observation(values)).isoformat(),
+        "available_through": latest.isoformat(),
         "daily": daily,
     }
 

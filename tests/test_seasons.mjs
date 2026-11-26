@@ -8,13 +8,17 @@ const day = (at, temperature_c, rain_mm) => ({ at, temperature_c, rain_mm });
 
 test("winter crosses years, includes leap day, and preserves missing seasons", () => {
   const winter = seasonalRows([
-    day("2023-12-31T07:00:00Z", 10, 0),
-    day("2024-01-01T07:00:00Z", 20, null),
-    day("2024-02-29T07:00:00Z", null, 2),
+    {...day("2023-12-31T07:00:00Z", 10, 0), temperature_min_c: 5, temperature_max_c: 14, wind_gust_m_s: 10},
+    {...day("2024-01-01T07:00:00Z", 20, null), temperature_min_c: 15, temperature_max_c: null, wind_gust_m_s: 5},
+    {...day("2024-02-29T07:00:00Z", null, 2), temperature_max_c: 18},
   ])[0];
   assert.equal(winter.label, "Winter 2023–24");
   assert.equal(winter.expectedDays, 91);
   assert.equal(winter.temperature_c, 15);
+  assert.equal(winter.temperature_max_c, 16);
+  assert.equal(winter.temperature_min_c, 10);
+  assert.equal(winter.coverage.temperature_max_c, 2);
+  assert.equal(winter.wind_gust_m_s, 10);
   assert.equal(winter.rain_mm, 2);
   assert.equal(winter.coverage.rain_mm, 2);
   const gaps = seasonalRows([
