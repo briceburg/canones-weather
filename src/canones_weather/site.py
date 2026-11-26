@@ -1,9 +1,12 @@
 """Assemble static sites with the shared station metadata."""
 
 import json
+import os
 import re
 import shutil
 from html import escape
+from urllib.parse import urljoin, urlsplit
+from urllib.request import Request, urlopen
 
 from canones_weather.reference import HOURLY_METRICS, STATIONS, USCRN_STATIONS
 from canones_weather.station import load_station
@@ -94,6 +97,42 @@ def render_html(source, station):
     return re.sub(r"\{\{ station\.(\w+) \}\}", lambda match: values[match[1]], source)
 
 
+def check_pages_history(repo_root):
+    if os.environ.get("CF_PAGES") != "1" or os.environ.get("CF_PAGES_BRANCH") != "main":
+        return
+    hostname = urlsplit(os.environ.get("CF_PAGES_URL", "")).hostname or ""
+    if hostname != "canones-weather.pages.dev" and not hostname.endswith(".canones-weather.pages.dev"):
+        return
+
+    config = json.loads((repo_root / "site/shared/assets/site-config.json").read_text())
+    feed = config["environments"]["prod"]["data"]
+    station_id = load_station()["id"]
+    dataset = None
+    for cadence in (None, "recent", "hourly", "daily"):
+        path = f"history/{cadence}.json" if cadence else "current.json"
+        url = urljoin(feed, path)
+        try:
+            request = Request(url, headers={"User-Agent": "Canones Weather Pages", "Cache-Control": "no-cache"})
+            with urlopen(request, timeout=10) as response:
+                data = json.load(response)
+            dataset_id = data["deployment"]["dataset_id"]
+            if data["schema_version"] != 1 or data["kind"] != "live" or not dataset_id:
+                raise ValueError("expected live station data")
+            if cadence is None:
+                if data["station"]["id"] != station_id:
+                    raise ValueError("wrong station")
+                dataset = dataset_id
+            elif (
+                data["station_id"] != station_id
+                or dataset_id != dataset
+                or data["cadence"] != cadence
+                or not isinstance(data["rows"], list)
+            ):
+                raise ValueError("snapshot does not match the station, dataset, or cadence")
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            raise SystemExit(f"Publish {url} then retry the station Pages build ({error}).") from error
+
+
 def build_site(repo_root, output_root):
     station = load_station()
     for name in ("hub", "canones"):
@@ -114,11 +153,12 @@ def build_site(repo_root, output_root):
         config_path = target / "assets/site-config.json"
         config = json.loads(config_path.read_text())
         config["station"] = station
-        config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if name == "canones":
             sample_path = target / "data/sample/current.json"
             sample = json.loads(sample_path.read_text())
             if any(sample["station"][key] != station[key] for key in ("id", "timezone")):
                 raise ValueError("Regenerate sample fixtures after changing the station ID or time zone")
+            config["sample_observed_at"] = sample["observed_at"]
             sample["station"]["name"] = station["name"]
             sample_path.write_text(json.dumps(sample, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

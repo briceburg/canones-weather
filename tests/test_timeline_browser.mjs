@@ -85,11 +85,16 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
   const mime = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json"};
   const requests = new Set();
   const historyRequests = () => [...requests].filter((path) => path.startsWith("/feed/history/"));
+  let failSampleCurrent = false;
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     const file = path === "/" ? "/index.html" : path;
     requests.add(file);
     res.setHeader("Content-Type", mime[extname(file)] ?? "application/octet-stream");
+    if (failSampleCurrent && file === "/data/sample/current.json") {
+      res.writeHead(503).end();
+      return;
+    }
     try {
       res.end(fixture[file] ? JSON.stringify(fixture[file]) : await read(file.slice(1)));
     } catch {
@@ -312,6 +317,13 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Sample station") && name.endsWith("high")));
     assert.match(await evaluate('document.getElementById("control-note").textContent'),
       /Bodega Marine · through Aug 14, 2026/);
+    failSampleCurrent = true;
+    await click('[data-mode="live"]');
+    await click('[data-mode="sample"]');
+    await waitFor(() => evaluate('document.getElementById("notice-text").textContent'),
+      (text) => text === "Sample current observations could not be loaded.");
+    const sampleWithoutCurrent = await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Sample station")));
+    assert.deepEqual(sampleWithoutCurrent.bounds, [anchor - 30 * DAY, anchor]);
     await call("Emulation.setDeviceMetricsOverride", {width: 320, height: 900, deviceScaleFactor: 1, mobile: true});
     await call("Emulation.setTouchEmulationEnabled", {enabled: true});
     await waitFor(view, (chart) => chart?.x[1] < 320);

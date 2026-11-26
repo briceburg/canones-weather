@@ -64,7 +64,7 @@ function stationFeed() {
   return path && new URL(path, location.href);
 }
 function historyEnd() {
-  return state.mode === "sample" ? state.current?.observedAt ?? state.history.recent?.data?.throughTime ?? -Infinity : Date.now();
+  return state.mode === "sample" ? Date.parse(settings.sample_observed_at) : Date.now();
 }
 function chartCadence(end = historyEnd()) {
   const recentThrough = Math.max(state.current?.observedAt ?? -Infinity, state.history.recent?.data?.throughTime ?? -Infinity);

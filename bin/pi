@@ -52,14 +52,17 @@ PY
       | tar -xf - -C "$snapshot"
     python3 - "$snapshot" <<'PY'
 import json, shutil, sys
+from datetime import datetime
 from pathlib import Path
 snapshot = Path(sys.argv[1])
 current = json.loads((snapshot / 'current.json').read_text())
+observed_at = datetime.fromisoformat(current['observed_at'])
 for cadence in ['recent', 'hourly', 'daily']:
     history = json.loads((snapshot / f'history/{cadence}.json').read_text())
+    through = datetime.fromisoformat(history['through'])
     if (history['cadence'] != cadence or history['station_id'] != current['station']['id']
             or history['deployment'] != current['deployment']
-            or (cadence == 'recent' and history['through'] != current['observed_at'])):
+            or through > observed_at or (cadence == 'recent' and through != observed_at)):
         raise SystemExit('The pilot feed changed during the copy. Run bin/pi snapshot again.')
 shutil.copytree(snapshot, 'dist/canones/data/pilot', dirs_exist_ok=True)
 p = Path('dist/canones/assets/site-config.json')

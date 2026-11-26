@@ -1,9 +1,11 @@
 import json
 import re
 from html import escape
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 import weewx
 import weewx.manager
 import weewx.schemas.wview_extended
@@ -11,9 +13,37 @@ import weewx.schemas.wview_extended
 from canones_weather import station
 from canones_weather.export import export
 from canones_weather.publish import publish
-from canones_weather.site import build_site
+from canones_weather.site import build_site, check_pages_history
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def test_station_pages_waits_for_history_from_current_dataset(monkeypatch):
+    monkeypatch.setenv("CF_PAGES", "1")
+    monkeypatch.setenv("CF_PAGES_BRANCH", "main")
+    live = {"kind": "live", "schema_version": 1, "deployment": {"dataset_id": "pilot-check"}}
+    payloads = {"current.json": {**live, "station": {"id": "canones"}}}
+    for cadence in ("recent", "hourly"):
+        payloads[f"history/{cadence}.json"] = {**live, "station_id": "canones", "cadence": cadence, "rows": []}
+
+    def fetch(request, *, timeout):
+        name = request.full_url.split("/canones/", 1)[1]
+        if name not in payloads:
+            raise FileNotFoundError(name)
+        return BytesIO(json.dumps(payloads[name]).encode())
+
+    monkeypatch.setattr("canones_weather.site.urlopen", fetch)
+    monkeypatch.setenv("CF_PAGES_URL", "https://build.iceburg-weather.pages.dev")
+    check_pages_history(ROOT)  # The hub can deploy while station data is unavailable.
+    monkeypatch.setenv("CF_PAGES_URL", "https://build.canones-weather.pages.dev")
+    with pytest.raises(SystemExit, match=r"history/daily\.json"):
+        check_pages_history(ROOT)
+    daily = {**live, "station_id": "canones", "cadence": "daily", "rows": []}
+    payloads["history/daily.json"] = {**daily, "deployment": {"dataset_id": "different"}}
+    with pytest.raises(SystemExit, match="does not match.*dataset"):
+        check_pages_history(ROOT)
+    payloads["history/daily.json"] = daily
+    check_pages_history(ROOT)
 
 
 def test_rename_updates_presentation_without_changing_observations_or_identity(tmp_path, monkeypatch):
@@ -50,7 +80,9 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         before_current = json.loads((public / "current.json").read_text())
         before_history = [(public / path).read_bytes() for path in history_files]
         before_sample = json.loads((site / "canones/data/sample/current.json").read_text())
-        before_config = json.loads((site / "canones/assets/site-config.json").read_text())
+        before_configs = {
+            route: json.loads((site / route / "assets/site-config.json").read_text()) for route in ("hub", "canones")
+        }
         before_page = (site / "canones/index.html").read_text()
 
         # Markup and template-like text must remain literal display text.
@@ -88,6 +120,7 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         assert f'aria-label="View {escape(name)} station on OpenStreetMap"' in page
         config = json.loads((site / route / "assets/site-config.json").read_text())
         assert config["station"] == metadata
+        before_config = before_configs[route]
         before_config["station"]["name"] = name
         assert config == before_config
 

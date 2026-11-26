@@ -148,6 +148,11 @@ bin/pi deploy
 bin/pi publish
 ```
 
+`bin/pi deploy` updates the unit for an already installed publisher. The
+production station site build checks that the public feed has all three history
+files for the current dataset. If the build is held, verify the Pi has published
+the new layout and retry the station deployment in Pages.
+
 The publisher credentials are installed root-only at `/etc/canones-weather/r2.env`
 and passed to an isolated service. `canones-weather-publish.timer` checks for
 changed exports every five minutes and uploads changed history before current
