@@ -47,6 +47,23 @@
         - "{{ weather_install_root }}"
         - "{{ weather_install_root }}/driver/user"
         - "{{ weather_install_root }}/src/canones_weather"
+    - name: Check for an installed weather publisher
+      ansible.builtin.stat:
+        path: /etc/systemd/system/canones-weather-publish.service
+      register: weather_publisher_unit
+    - name: Update the installed publisher before its Python code
+      when: weather_publisher_unit.stat.isreg | default(false)
+      block:
+        - name: Install the updated publisher service
+          ansible.builtin.template:
+            src: canones-weather-publish.service.j2
+            dest: /etc/systemd/system/canones-weather-publish.service
+            owner: root
+            group: root
+            mode: '0644'
+        - name: Reload the updated publisher service
+          ansible.builtin.systemd_service:
+            daemon_reload: true
     - name: Copy the Python project and lock file
       ansible.builtin.copy:
         src: "../../{{ item }}"

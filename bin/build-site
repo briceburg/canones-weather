@@ -7,7 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from canones_weather.site import build_site  # noqa: E402
+from canones_weather.site import build_site, check_pages_history  # noqa: E402
 
+check_pages_history(ROOT)
 build_site(ROOT, ROOT / "dist")
 print("Built dist/hub and dist/canones")

@@ -4,6 +4,7 @@ import argparse
 import fcntl
 import json
 import logging
+import os
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
@@ -127,8 +128,12 @@ def publish(config, *, state_dir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path)
-    parser.add_argument("--state-dir", type=Path, required=True, help="Private directory for upload receipts")
+    parser.add_argument(
+        "--state-dir", type=Path, default=os.getenv("STATE_DIRECTORY"), help="Private directory for upload receipts"
+    )
     args = parser.parse_args()
+    if args.state_dir is None:
+        parser.error("set --state-dir when running outside the publisher service")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     publish(json.loads(args.config.read_text()), state_dir=args.state_dir)
 

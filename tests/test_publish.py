@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from canones_weather.jsonio import write_json
-from canones_weather.publish import publish
+from canones_weather.publish import main, publish
 
 
 @pytest.fixture
@@ -96,7 +96,11 @@ def test_failed_publication_resumes_and_same_watermark_corrections_upload(snapsh
     assert uploaded == ["canones/history/daily.json"]
 
     interrupted = False
-    publish(config, state_dir=state_dir)
+    config_file = state_dir.parent / "config.json"
+    write_json(config_file, {**config, "source_root": str(config["source_root"])})
+    monkeypatch.setenv("STATE_DIRECTORY", str(state_dir))
+    monkeypatch.setattr("sys.argv", ["publish", str(config_file)])
+    main()
     assert uploaded == [
         "canones/history/daily.json",
         "canones/history/hourly.json",
