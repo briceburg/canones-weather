@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { seasonalRows as summarize } from "../site/shared/assets/seasons.js";
+import { seasonalRows as summarize } from "../site/canones/assets/seasons.js";
 
 const seasonalRows = (daily, monsoon = false) => summarize(daily, monsoon, "America/Denver");
 

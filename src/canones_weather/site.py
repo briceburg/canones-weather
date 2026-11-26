@@ -135,7 +135,7 @@ def build_site(repo_root, output_root):
         if target.exists():
             shutil.rmtree(target)
         shutil.copytree(source, target)
-        shutil.copytree(repo_root / "site/shared/assets", target / "assets")
+        shutil.copytree(repo_root / "site/shared/assets", target / "assets", dirs_exist_ok=True)
         shutil.copyfile(repo_root / "site/shared/_headers", target / "_headers")
         config_path = target / "assets/site-config.json"
         config = json.loads(config_path.read_text())

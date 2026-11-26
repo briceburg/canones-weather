@@ -7,7 +7,7 @@ import {tmpdir} from "node:os";
 import {extname, join} from "node:path";
 import test from "node:test";
 import {setTimeout as delay} from "node:timers/promises";
-import { DAY, HOUR } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR } from "../site/canones/assets/timeline.js";
 
 const browser = ["chromium", "chromium-browser", "google-chrome"]
   .find((command) => spawnSync(command, ["--version"], {stdio: "ignore"}).status === 0);

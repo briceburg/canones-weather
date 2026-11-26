@@ -245,12 +245,12 @@ function validHistory(data, cadence) {
     (state.mode === "live" && !data.deployment?.dataset_id)
   )
     throw new Error("The history feed is incomplete.");
+  const fields = ["temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm", "solar_w_m2"];
+  if (cadence !== "recent") fields.push("temperature_min_c", "temperature_max_c");
   const rows = parseRows(data.rows, throughTime, (row, at) => {
     if (cadence !== "recent" && at >= throughTime) throw new Error("History includes an unfinished interval.");
-    for (const field of ["temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm"])
+    for (const field of fields)
       if (row[field] !== null && !numeric(row[field])) throw new Error("History contains an invalid value.");
-    for (const field of ["temperature_min_c", "temperature_max_c", "solar_w_m2"])
-      if (row[field] != null && !numeric(row[field])) throw new Error("History contains an invalid optional value.");
   });
   const history = {...data, throughTime, recordStartedAt, rows};
   if (!matchesCurrentDataset(history)) throw new Error("Current observations use a different history dataset.");
@@ -260,9 +260,9 @@ function validReference(data, key, cadence) {
   const hourly = cadence === "hourly";
   const through = hourly ? parseTimestamp(data.through) : Infinity;
   if (data.schema_version !== 1 || data.kind !== "reference" || data.source?.id !== key ||
-      !["modeled", "observed"].includes(data.source.type) || typeof data.source.name !== "string" ||
+      data.source.type !== "observed" || typeof data.source.name !== "string" ||
       !numeric(data.source.elevation_m) || !Array.isArray(data[cadence]) || !data[cadence].length ||
-      (hourly ? !numeric(through) || data.source.type !== "observed" :
+      (hourly ? !numeric(through) :
         !Number.isFinite(Date.parse(data.start_date)) || !Number.isFinite(Date.parse(data.end_date))))
     throw new Error("Invalid reference metadata");
   const rows = parseRows(data[cadence], hourly ? through - HOUR : through, (row, at) => {
