@@ -3,11 +3,12 @@
 Reference history compares weather across locations: for example, Albuquerque's
 monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
-Select references in the dashboard to compare daily measurements in 7d, 30d, 1y,
-All history, Seasons, or Monsoon. You can also widen the 24h timeline past 24 hours to
-show daily summaries. In 24h, Bodega Marine and Valles Caldera offer hourly
+Select references in the dashboard to compare daily measurements in 30d, 1yr,
+All history, Seasons, or Monsoon. Widen the hourly timeline past seven days
+to show daily summaries. In 7d, Bodega Marine and Valles Caldera offer hourly
 temperature highs and lows, precipitation, relative humidity, and solar irradiance.
-The picker labels sources that need a daily view and remembers your selections.
+The 24h five-minute view shows the station. The picker labels sources that need
+a daily view and remembers your selections.
 Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station

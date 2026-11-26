@@ -1,6 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
-import { HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "./timeline.js";
+import { HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -19,7 +19,13 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
   timeZoneName: "short",
 });
 const hourFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone, hour: "numeric",
+  timeZone: settings.station.timezone, weekday: "short", hour: "numeric",
+});
+const recentTickFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: settings.station.timezone, weekday: "short", hour: "numeric", minute: "2-digit",
+});
+const weekdayFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: settings.station.timezone, weekday: "short",
 });
 const clockFormat = new Intl.DateTimeFormat("en-US", {
   timeZone: settings.station.timezone,
@@ -59,12 +65,13 @@ const referenceSources = Object.fromEntries(referenceInputs.map((input) => [inpu
 const referenceFeeds = {daily: new Map(), hourly: new Map()};
 const referenceRefresh = {daily: HOUR, hourly: HOUR / 4};
 const hourlyDelay = 3 * HOUR;
-const periodDays = { day: 1, week: 7, month: 30, year: 365, all: Infinity };
+const periodDays = { day: 1, week: HOURLY_PRESET_DAYS, month: 30, year: 365, all: Infinity };
 const minute = HOUR / 60;
+const archiveStep = 5 * minute;
 const state = {
   mode: settings.default_mode,
   metric: "temperature",
-  period: "week",
+  period: "day",
   units: "us",
   current: null,
   history: null,
@@ -73,9 +80,11 @@ const state = {
   controls: new Set(),
   showStation: true,
 };
-function referenceCadence() {
-  const days = periodDays[state.period];
-  return days === undefined || usesDailyHistory(days, state.viewport) ? "daily" : "hourly";
+function historyEnd() {
+  return state.mode === "sample" ? state.history?.throughTime ?? state.current?.observedAt ?? -Infinity : Date.now();
+}
+function chartCadence(end = historyEnd()) {
+  return historyCadence(periodDays[state.period], state.viewport, end, state.history?.recent?.at(-1)?.at);
 }
 let requestId = 0;
 let timelineDomain = null;
@@ -95,7 +104,7 @@ function rememberViewport(event) {
     : windowFromPercent(timelineDomain, zoom);
   if (!(view.from < view.to)) return;
   state.viewport = timelineWindow(timelineDomain, periodDays[state.period], view);
-  if (usesDailyHistory(periodDays[state.period], state.viewport) !== timelineDomain.daily) {
+  if (chartCadence(timelineDomain.end) !== timelineDomain.cadence) {
     renderChart();
   } else {
     renderPeriodSelection();
@@ -115,7 +124,8 @@ function zoomTo(view) {
 }
 function moveWindow(direction) {
   const view = currentWindow();
-  const offset = timelineDomain.daily ? calendarDayOffset(view.from, direction, settings.station.timezone) : direction * HOUR;
+  const offset = timelineDomain.cadence === "daily" ? calendarDayOffset(view.from, direction, settings.station.timezone)
+    : direction * (timelineDomain.cadence === "recent" ? archiveStep : HOUR);
   const next = shiftWindow(timelineDomain, view, offset);
   if (next.from !== view.from) zoomTo(next);
 }
@@ -387,12 +397,12 @@ function renderChart() {
   const seasonal = ["seasons", "monsoon"].includes(state.period);
   $("monsoon-source").hidden = state.period !== "monsoon";
   const days = periodDays[state.period];
-  const cadence = referenceCadence();
+  const end = historyEnd();
+  const cadence = chartCadence(end);
   const daily = !seasonal && cadence === "daily";
+  const recent = cadence === "recent";
   const history = state.history;
-  const resolution = seasonal ? "Seasonal" : daily ? "Daily" : "Hourly";
-  const sampleEnd = history?.throughTime ?? state.current?.observedAt;
-  const end = state.mode === "sample" ? sampleEnd ?? -Infinity : Date.now();
+  const resolution = seasonal ? "Seasonal" : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
   const selectRows = (data, interval = 0) => {
     const selectedRows = (data?.[cadence] ?? []).filter(
       (row) => row.at + interval <= end,
@@ -405,16 +415,16 @@ function renderChart() {
   const stationSubtitle = state.showStation
     ? `${stationName} history · Mountain Time`
     : `${stationName} hidden · Mountain Time`;
-  $("history-resolution").textContent = `${resolution} summaries`;
+  $("history-resolution").textContent = recent ? "Five-minute observations" : `${resolution} summaries`;
   const feed = referenceFeeds[cadence];
   const activeControls = [];
-  const hasEligibleSource = Object.values(referenceSources).some((source) => source[cadence].includes(state.metric));
+  const hasEligibleSource = !recent && Object.values(referenceSources).some((source) => source[cadence].includes(state.metric));
   $("reference-sources").disabled = !hasEligibleSource;
   for (const input of referenceInputs) {
     const key = input.dataset.control;
     const source = referenceSources[key];
     const {status} = source;
-    const supportsMetric = source[cadence].includes(state.metric);
+    const supportsMetric = !recent && source[cadence].includes(state.metric);
     input.disabled = !supportsMetric;
     input.checked = supportsMetric && state.controls.has(key);
     status.hidden = !hasEligibleSource || supportsMetric;
@@ -440,8 +450,9 @@ function renderChart() {
     rows: selectRows(data, referenceInterval),
   }));
   const dailyAvailable = Object.values(referenceSources).some((source) => source.daily.includes(state.metric));
-  const controlNote = !hasEligibleSource
-    ? cadence === "hourly" && dailyAvailable ? "Choose 7d to compare this measurement in daily summaries."
+  const controlNote = recent ? "Choose 7d or 30d to compare references."
+    : !hasEligibleSource
+    ? cadence === "hourly" && dailyAvailable ? "Choose 30d to compare this measurement in daily summaries."
       : "No references report the selected metric."
     : !showReferences ? "Select sources to compare regional weather."
     : activeControls.map((key) => {
@@ -474,7 +485,7 @@ function renderChart() {
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(endpoints[0].at)} – ${dateFormat.format(endpoints.at(-1).at)}`;
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
-  const stationFields = state.metric === "temperature" ? temperatureFields : [[field, label.toLowerCase()]];
+  const stationFields = state.metric === "temperature" && !recent ? temperatureFields : [[field, label.toLowerCase()]];
   if (state.metric === "wind") stationFields.push(["wind_gust_m_s", "peak gust"]);
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
   const stationHasData = plottedFields.length > 0;
@@ -524,11 +535,10 @@ function renderChart() {
     const secondary = low || gust;
     const marker = low ? "emptyCircle" : "circle";
     const opacity = secondary ? .72 : 1;
-    const allSymbols = seasonal || state.period === "day";
     let hasIsolatedPoints = false;
     const data = dataRows.map((row, index) => {
       const value = [seasonal ? index : row.at, convert(row[key])];
-      if (line && !allSymbols && numeric(value[1]) &&
+      if (line && !seasonal && numeric(value[1]) &&
           !numeric(dataRows[index - 1]?.[key]) && !numeric(dataRows[index + 1]?.[key])) {
         hasIsolatedPoints = true;
         return {value, symbol: marker};
@@ -538,8 +548,8 @@ function renderChart() {
     return {
       name,
       type: line ? "line" : "bar",
-      showSymbol: allSymbols || hasIsolatedPoints,
-      symbol: allSymbols ? marker : "none",
+      showSymbol: seasonal || hasIsolatedPoints,
+      symbol: seasonal ? marker : "none",
       symbolSize: 4,
       connectNulls: false,
       data,
@@ -564,9 +574,10 @@ function renderChart() {
       label: {formatter: "{b}", color: stationStyle.color, position: "insideEndTop"},
     };
   }
-  // Keep the selected dates when switching between hourly and daily records.
-  const first = Math.min(endpoints[0].at, state.viewport?.from ?? Infinity);
-  timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), daily};
+  // Keep older hourly dates reachable from the rolling five-minute archive.
+  const oldestHourly = recent ? history.hourly[0]?.at : undefined;
+  const first = Math.min(endpoints[0].at, oldestHourly ?? Infinity, state.viewport?.from ?? Infinity);
+  timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), cadence};
   const view = seasonal ? null : currentWindow();
   const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : {...zoomValues(view), minValueSpan: 1};
   renderWindow = (view) => {
@@ -580,7 +591,7 @@ function renderChart() {
   };
   if (seasonal) describeCoverage();
   else {
-    const step = daily ? "one day" : "one hour";
+    const step = daily ? "one day" : recent ? "five minutes" : "one hour";
     $("timeline-earlier").setAttribute("aria-label", `Move window ${step} earlier`);
     $("timeline-later").setAttribute("aria-label", `Move window ${step} later`);
     renderWindow(view);
@@ -622,7 +633,9 @@ function renderChart() {
         formatter: (entries) => {
           const date = new Date(entries[0].value[0]);
           const title = seasonal ? rows[entries[0].value[0]].label
-            : daily ? dateFormat.format(date) : `Hour starting ${timeFormat.format(date)}`;
+            : daily ? `${weekdayFormat.format(date)}, ${dateFormat.format(date)}`
+            : recent ? `Five minutes ending ${weekdayFormat.format(date)}, ${timeFormat.format(date)}`
+            : `${weekdayFormat.format(date)}, ${timeFormat.formatRange(date, new Date(date.getTime() + HOUR))}`;
           const ordered = state.metric === "temperature" ? entries : [...entries].sort((a, b) => {
             const aValue = a.value[1], bValue = b.value[1];
             return numeric(aValue) && numeric(bValue) ? bValue - aValue
@@ -650,8 +663,8 @@ function renderChart() {
         axisLabel: {
           hideOverlap: true,
           color: "#a1b0ab",
-          formatter: (value) => seasonal ? value.replace(" ", "\n") : daily ?
-            dateFormat.format(new Date(value)).replace(", ", "\n") : hourFormat.format(new Date(value)),
+          formatter: (value) => seasonal ? value.replace(" ", "\n") : daily
+            ? dateFormat.format(value).replace(", ", "\n") : (recent ? recentTickFormat : hourFormat).format(value),
         },
       },
       yAxis: {
@@ -706,7 +719,7 @@ function renderChart() {
   const sources = stationHasData
     ? stationName + (referenceHasData ? " and selected references" : "")
     : "selected references";
-  const measurement = state.metric === "temperature" ? "temperature lows and highs" : label.toLowerCase();
+  const measurement = state.metric === "temperature" && !recent ? "temperature lows and highs" : label.toLowerCase();
   $("chart").setAttribute("aria-label", `${resolution} ${measurement} chart for ${sources}`);
 }
 async function load({ refresh = false } = {}) {
@@ -824,7 +837,7 @@ async function loadReference(key, cadence) {
     entry.failed = true;
   }
   entry.loading = false;
-  if (state.controls.has(key) && cadence === referenceCadence()) renderChart();
+  if (state.controls.has(key) && cadence === chartCadence()) renderChart();
 }
 stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
@@ -837,8 +850,8 @@ for (const input of referenceInputs) {
     if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
     if (input.checked) {
       state.controls.add(key);
-      const cadence = referenceCadence();
-      const entry = referenceFeeds[cadence].get(key);
+      const cadence = chartCadence();
+      const entry = referenceFeeds[cadence]?.get(key);
       if (entry && (entry.failed || Date.now() - entry.checkedAt >= referenceRefresh[cadence]))
         loadReference(key, cadence);
     } else state.controls.delete(key);
@@ -849,10 +862,12 @@ new ResizeObserver(() => chart.resize()).observe($("chart"));
 setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
-  const cadence = referenceCadence();
+  const cadence = chartCadence();
+  const feed = referenceFeeds[cadence];
+  if (!feed) return;
   for (const input of referenceInputs) {
     const key = input.dataset.control;
-    const lastCheck = referenceFeeds[cadence].get(key)?.checkedAt ?? 0;
+    const lastCheck = feed.get(key)?.checkedAt ?? 0;
     if (input.checked && !input.matches(":disabled") && Date.now() - lastCheck >= referenceRefresh[cadence])
       loadReference(key, cadence);
   }

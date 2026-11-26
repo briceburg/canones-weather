@@ -91,9 +91,10 @@ extremes or turn missing rainfall into a dry period.
 
 The exporter supplies the last 24 hours at five-minute resolution in `recent`,
 30 days of hourly summaries, and daily summaries for the full archive. The
-chart uses hourly rows in 24h and daily rows in broader views. Temperature
-charts show recorded lows and highs. The station feed also includes the measured
-mean. All includes the full daily history supplied by the feed.
+chart starts with `recent` in 24h and uses hourly rows in 7d. The longer presets
+use daily rows. Hourly and daily temperature charts show recorded lows and highs.
+The five-minute chart shows the measured temperature of each archive record.
+All history includes the full daily history supplied by the feed.
 Chart windows do not set archive
 retention: retain the full five-minute archive and consistent off-device backups
 independently of these exports.

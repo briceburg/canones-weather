@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DAY, HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "../site/shared/assets/timeline.js";
 
-test("a live 24h preset ends at now with stale or newly started history", () => {
+test("the live hourly preset ends at now with stale or newly started history", () => {
   const now = Date.UTC(2026, 10, 24, 19, 35);
   for (const first of [now - 4 * DAY, now - HOUR]) {
-    const domain = timeDomain(first, now, 1);
-    assert.deepEqual(timelineWindow(domain, 1), {from: now - DAY, to: now});
-    assert.equal(domain.start, Math.min(first, now - DAY));
+    const domain = timeDomain(first, now, HOURLY_PRESET_DAYS);
+    assert.deepEqual(timelineWindow(domain, HOURLY_PRESET_DAYS), {from: now - 7 * DAY, to: now});
+    assert.equal(domain.start, Math.min(first, now - 7 * DAY));
   }
   assert.deepEqual(timeDomain(now - 4 * DAY, now, Infinity), {start: now - 4 * DAY, end: now});
 });
@@ -51,18 +51,30 @@ test("daily movement advances through a skipped hour and selects the first repea
   }
 });
 
-test("panning a 24h view stays hourly and widening it enables daily comparisons", () => {
-  const domain = {start: 0, end: 31 * DAY};
-  const initial = timelineWindow(domain, 1);
-  const earlier = shiftWindow(domain, initial, -2 * HOUR);
-  assert.equal(usesDailyHistory(1, earlier), false);
-  assert.equal(usesDailyHistory(1, {from: earlier.from - 2 * HOUR, to: earlier.to}), true);
-  assert.equal(usesDailyHistory(30, earlier), true);
+test("24h uses the five-minute archive and switches to hourly beyond its coverage", () => {
+  const through = Date.UTC(2026, 10, 24, 19, 35);
+  const now = through + HOUR / 30;
+  assert.equal(historyCadence(1, null, now, through), "recent");
+  assert.equal(historyCadence(1, null, now), "hourly");
+  const older = {from: through - DAY - HOUR, to: through - HOUR};
+  assert.equal(historyCadence(1, older, now, through), "hourly");
+  const narrowed = {from: through - HOUR, to: through};
+  assert.equal(historyCadence(1, narrowed, now, through), "recent");
+  assert.equal(historyCadence(7, narrowed, now, through), "hourly");
 });
 
-test("7d shows the latest week while retaining earlier history for panning", () => {
+test("panning a 7d view stays hourly and widening it enables daily comparisons", () => {
+  const domain = {start: 0, end: 31 * DAY};
+  const initial = timelineWindow(domain, HOURLY_PRESET_DAYS);
+  const earlier = shiftWindow(domain, initial, -2 * HOUR);
+  assert.equal(historyCadence(7, earlier, domain.end), "hourly");
+  assert.equal(historyCadence(7, {from: earlier.from - 2 * HOUR, to: earlier.to}, domain.end), "daily");
+  assert.equal(historyCadence(30, earlier, domain.end), "daily");
+});
+
+test("30d shows the latest thirty days while retaining earlier history for panning", () => {
   const domain = {start: Date.UTC(2016, 0, 1), end: Date.UTC(2026, 7, 15)};
-  assert.deepEqual(timelineWindow(domain, 7), {from: domain.end - 7 * DAY, to: domain.end});
+  assert.deepEqual(timelineWindow(domain, 30), {from: domain.end - 30 * DAY, to: domain.end});
   assert.deepEqual(timelineWindow(domain, Infinity), {from: domain.start, to: domain.end});
 });
 
