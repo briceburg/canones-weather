@@ -213,21 +213,19 @@
                 Sample history · hourly detail and daily summaries
               </p>
             </div>
-            <div class="segments" aria-label="History period">
-              <button type="button" data-period="day" aria-pressed="true">
-                24h</button
-              ><button type="button" data-period="month" aria-pressed="false">
-                30d</button
-              ><button type="button" data-period="year" aria-pressed="false">
-                1y</button
-              ><button type="button" data-period="three-years" aria-pressed="false">
-                3y</button
-              ><button type="button" data-period="all" aria-pressed="false">
-                All
-              </button>
-              <button type="button" data-period="seasons" aria-pressed="false">Seasons</button>
-              <button type="button" data-period="monsoon" aria-pressed="false">Monsoon</button>
-              <span id="custom-period" class="custom-period" role="status" hidden>Custom</span>
+            <div class="history-periods">
+              <div class="segments history-presets" role="group" aria-label="History presets">
+                <button type="button" data-period="day" aria-pressed="false">24h</button>
+                <button type="button" data-period="week" aria-pressed="true">7d</button>
+                <button type="button" data-period="month" aria-pressed="false">30d</button>
+                <button type="button" data-period="year" aria-pressed="false">1y</button>
+              </div>
+              <div class="segments history-views" role="group" aria-label="Long-term history">
+                <button type="button" data-period="all" aria-pressed="false">All history</button>
+                <button type="button" data-period="seasons" aria-pressed="false">Seasons</button>
+                <button type="button" data-period="monsoon" aria-pressed="false">Monsoon</button>
+                <span id="custom-period" class="custom-period" role="status" hidden>Custom</span>
+              </div>
             </div>
           </div>
           <div class="chart-toolbar">
@@ -283,6 +281,7 @@
                 <span id="timeline-dates-error" role="status"></span>
               </form>
             </details>
+            <p class="small timeline-help">Drag across the plot to zoom. Move or resize the timeline window below it. Select a period to reset.</p>
           </div>
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
@@ -290,7 +289,7 @@
             <fieldset class="reference-sources" id="reference-sources" aria-describedby="control-note" disabled>
               <legend>Reference history</legend>
               {{ reference_groups }}
-              <p id="control-note" class="small" aria-live="polite">Widen past 24h or choose 30d to compare daily references.</p>
+              <p id="control-note" class="small" aria-live="polite">Select sources to compare regional weather.</p>
             </fieldset>
             <div class="source-footer small">
               <a href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md#station-locations">Sources, coverage &amp; methods ↗</a>
@@ -299,7 +298,6 @@
           </fieldset>
           <p class="chart-description" id="chart-description" hidden></p>
           <a id="monsoon-source" class="small" href="https://www.weather.gov/abq/prepawaremonsoonhome" hidden>NWS monsoon season: June 15–September 30 ↗</a>
-          <p class="small timeline-help">Drag the timeline window to move it, or drag its handles to resize it. Select a period to reset.</p>
           <p class="history-foot">
             <span id="history-range">—</span
             ><span id="history-resolution">—</span>

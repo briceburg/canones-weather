@@ -3,8 +3,8 @@
 Reference history compares weather across locations: for example, Albuquerque's
 monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
-Select references in the dashboard to compare daily measurements in 30d, 1y, 3y,
-All, Seasons, or Monsoon. You can also widen the 24h timeline past 24 hours to
+Select references in the dashboard to compare daily measurements in 7d, 30d, 1y,
+All history, Seasons, or Monsoon. You can also widen the 24h timeline past 24 hours to
 show daily summaries. The picker labels unavailable measurements "No data",
 disables selection in hourly history, and remembers your selections.
 Current conditions show the local station's observations.
@@ -88,6 +88,29 @@ source-specific day counts instead of implying a precise date on a seasonal bar.
 The collector must export `record_started_at` for this marker to appear; it is
 never inferred from the oldest point in a rolling window. Imported values never
 enter WeeWX or Wunderground/CWOP submissions.
+
+## Hourly comparison criteria
+
+The dashboard currently uses Secco Spring's hourly archive and daily reference
+feeds. NOAA publishes upstream hourly records for Bodega Marine, Albuquerque
+airport, and Santa Fe airport. USCRN provides Bodega's hourly averages and
+precipitation totals with timestamps at the end of the measured hour.
+GHCN-Hourly combines airport reports at regular and irregular times. An airport
+temperature report is a point observation, and its nominal hourly precipitation
+can be a running total repeated across several reports. Use the documented
+reporting interval and select the final report for a cumulative interval.
+
+Before adding an hourly reference, verify the exact station identifier and any
+site or instrumentation changes, document the units and measurement method,
+and preserve original timestamps, source codes, and quality flags. Compare
+like measurements and preserve gaps, including missing precipitation between
+reports. Run completeness checks per metric, with a target of at least 95% of
+expected hours per advertised year and over the most recent 30 days of completed
+hours. For the 24h view, check the feed hourly for 30 days and require the latest
+usable reading to be within three hours on at least 95% of checks.
+
+[USCRN hourly02 format](https://www.ncei.noaa.gov/pub/data/uscrn/products/hourly02/README.txt)
+and [GHCN-Hourly documentation](https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/doc/ghcnh_DOCUMENTATION.pdf).
 
 ## Abiquiu gaps and supplemental reports
 

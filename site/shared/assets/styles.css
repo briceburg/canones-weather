@@ -487,6 +487,19 @@ p {
   color: var(--muted);
   margin: 0;
 }
+.history-periods {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.history-views.segments {
+  border: 0;
+  padding: 0;
+}
+.history-views.segments button,
+.history-views .custom-period {
+  padding-inline: 8px;
+}
 .chart-toolbar {
   display: flex;
   justify-content: space-between;
@@ -660,6 +673,9 @@ p {
     flex-direction: column;
     gap: 13px;
   }
+  .history-periods {
+    justify-items: start;
+  }
   .chart-tabs {
     gap: 20px;
   }
@@ -767,7 +783,12 @@ p {
   .history-heading .segments {
     flex-wrap: wrap;
     width: 100%;
-    justify-content: space-between;
+  }
+  .history-periods {
+    width: 100%;
+  }
+  .history-presets button {
+    flex: 1;
   }
   .segments button {
     padding: 6px 10px;
