@@ -56,12 +56,19 @@ production collection or network upload paths.
 
 ## Chart history
 
-Publish `canones/history.json` with `schema_version`, `kind`, `station_id`, and
-`through` (the latest observation represented), optional `record_started_at`
-(the first archived observation, used for the source-boundary marker), plus ascending `recent`, `hourly`, and `daily`
-arrays. [The sample history](../site/canones/data/sample/history.json) illustrates
-the shape with 24 hours of five-minute data, 30 days of hourly data, and
-daily data beginning in January 2024.
+Publish the three snapshots under `canones/history/`. Each contains
+`schema_version`, `kind`, `station_id`, `cadence`, `through`, `record_started_at`
+(the first archived observation), and a `rows` array sorted by timestamp. Live
+snapshots also carry the same `deployment` metadata as `current.json`.
+
+| File | Window | `through` |
+| --- | --- | --- |
+| `recent.json` | Last 24 hours of five-minute observations | Latest archive observation |
+| `hourly.json` | Last 30 days of hourly summaries | End of the last completed UTC hour |
+| `daily.json` | Daily summaries for the full archive | End of the last completed station-local day |
+
+[The synthetic fixtures](../site/canones/data/sample/history/) use this layout
+with daily summaries beginning in January 2024.
 
 Each row has `at` and these fields:
 
@@ -89,10 +96,9 @@ and aggregation limitations.
 Hourly and daily temperatures include mean, minimum, and maximum; averaging must not discard
 extremes or turn missing rainfall into a dry period.
 
-The exporter supplies the last 24 hours at five-minute resolution in `recent`,
-30 days of hourly summaries, and daily summaries for the full archive. The
-chart starts with `recent` in 24h and uses hourly rows in 7d. The longer presets
-use daily rows. Hourly and daily temperature charts show recorded lows and highs.
+The chart loads the active cadence, starting with `recent` in 24h and using
+hourly rows in 7d. The longer presets use daily rows. Hourly and daily temperature
+charts show recorded lows and highs.
 The five-minute chart shows the measured temperature of each archive record.
 All history includes the full daily history supplied by the feed.
 Chart windows do not set archive
@@ -101,12 +107,13 @@ independently of these exports.
 
 ## Serving and freshness
 
-Serve JSON with `Content-Type: application/json`, public-read CORS, and
-`Cache-Control: public, max-age=60`. Upload history before the current observation
-when publishing a batch. The publisher rejects pairs with different observation
-timestamps, including files read across a local export. Browser requests may
-still straddle two uploads; a notice identifies different update times. The browser refresh interval is five minutes;
-current and history endpoints can fail independently.
+Serve JSON with `Content-Type: application/json` and public-read CORS. The
+publisher checks for changed content every five minutes and publishes changed
+history files before `current.json`. The five-minute snapshot and the current
+observation share a watermark. Hourly and daily snapshots have independent
+watermarks, and a recovery can change either file without advancing its
+watermark. The dashboard revalidates the current observation and active chart
+feed separately and keeps the last validated data for each.
 
 [Site configuration](../site/README.md) selects feeds by hostname and supports
 sample/live modes plus local Pi snapshots. Production defaults to live data;

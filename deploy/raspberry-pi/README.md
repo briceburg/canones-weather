@@ -47,7 +47,7 @@ and archives stay unchanged.
 | `/opt/canones-weather` | Root-owned application, virtualenv, and pinned driver |
 | `/var/lib/canones-weather/pilot/weewx.conf` | Collector configuration |
 | `/var/lib/canones-weather/pilot/archive/weewx.sdb` | Pilot archive and daily summaries |
-| `/var/lib/canones-weather/pilot/public/` | `current.json` and `history.json` |
+| `/var/lib/canones-weather/pilot/public/` | `current.json` and `history/{recent,hourly,daily}.json` |
 
 The pilot archive is separate from verified production history. Its primary
 outdoor temperature/humidity may be supplied by WN32; JSON identifies the source
@@ -149,15 +149,18 @@ bin/pi publish
 ```
 
 The publisher credentials are installed root-only at `/etc/canones-weather/r2.env`
-and passed to an isolated service. `canones-weather-publish.timer` uploads history
-then current JSON every five minutes, preserving the observation time and dataset
-notice. It rejects samples, mismatched datasets, and unverified production data.
+and passed to an isolated service. `canones-weather-publish.timer` checks for
+changed exports every five minutes and uploads changed history before current
+JSON. It rejects samples, mismatched datasets, and unverified production data.
+The service keeps successful upload receipts in its private
+`/var/lib/canones-weather-publisher/` state directory. Clearing the receipts
+forces all four snapshots to be uploaded on the next run.
 The broad Cloudflare infrastructure token belongs only on the deployment host.
 
-The publisher can repeatedly upload old exports. Check `current.json`'s
-`observed_at`, `history.json`'s `through`, the latest archive record, and collector
-restarts and logs to assess freshness. Upload and file modification times do not
-date the observations. See [outages and SD recovery](../../docs/station.md#outages-and-recovery)
+Check `current.json`'s `observed_at`, each history file's `through`, the latest
+archive record, and collector logs to assess freshness. Use the
+[data contract](../../docs/data.md#chart-history) to interpret each watermark.
+See [outages and SD recovery](../../docs/station.md#outages-and-recovery)
 before importing gateway files or enabling catch-up.
 
 Inspect publishing with `systemctl status canones-weather-publish.timer` and

@@ -10,7 +10,9 @@ Group=canones-weather
 EnvironmentFile=/etc/canones-weather/r2.env
 Environment=AWS_EC2_METADATA_DISABLED=true
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/canones-weather/.venv/bin/python -m canones_weather.publish /etc/canones-weather/publisher.json
+StateDirectory=canones-weather-publisher
+StateDirectoryMode=0700
+ExecStart=/opt/canones-weather/.venv/bin/python -m canones_weather.publish /etc/canones-weather/publisher.json --state-dir ${STATE_DIRECTORY}
 TimeoutStartSec=180
 NoNewPrivileges=true
 PrivateTmp=true

@@ -33,7 +33,9 @@ see the [Pi guide](../deploy/raspberry-pi/README.md).
 ## Charts
 
 Select temperature, humidity, wind, rain, or solar irradiance. The default 24h
-view uses five-minute station observations. It switches to hourly summaries
+view uses five-minute station observations. Current conditions load separately
+from the chart, which loads as it approaches the viewport and requests only the
+active history cadence. The 24h view switches to hourly summaries
 when panned outside the five-minute archive or widened past 24 hours. The 7d
 view starts with hourly summaries, with Bodega Marine and Valles Caldera
 available for selected measurements. Windows wider than 7 days and the 30d,

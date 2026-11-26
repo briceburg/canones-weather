@@ -44,42 +44,51 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
 }, async () => {
   const root = new URL("../dist/canones/", import.meta.url);
   const read = (name) => readFile(new URL(name, root));
-  const sample = JSON.parse(await read("data/sample/history.json"));
-  const anchor = Date.parse(sample.through);
+  const cadences = ["recent", "hourly", "daily"];
+  const sample = Object.fromEntries(await Promise.all(cadences.map(async (cadence) => [
+    cadence, JSON.parse(await read(`data/sample/history/${cadence}.json`)),
+  ])));
+  const anchor = Date.parse(sample.recent.through);
   const current = JSON.parse(await read("data/sample/current.json"));
   const config = JSON.parse(await read("assets/site-config.json"));
+  const deployment = {phase: "pilot", dataset_id: "browser-test", notice: "Pilot test observations"};
+  const dailyRows = sample.daily.rows;
   const reference = {
     schema_version: 1, kind: "reference",
     source: {id: "bodega", name: "Bodega Marine test data", type: "observed", elevation_m: 19.2},
     start_date: "2020-01-01", end_date: new Date(anchor + 7 * DAY).toISOString(),
-    daily: [sample.daily.length, 0].flatMap((days) => sample.daily.map((row) => ({
+    daily: [dailyRows.length, 0].flatMap((days) => dailyRows.map((row) => ({
       ...row, at: new Date(Date.parse(row.at) - days * DAY).toISOString(),
     }))),
   };
   reference.daily.push({...reference.daily.at(-1), at: reference.end_date});
   const fixture = {
     "/assets/site-config.json": config,
-    "/feed/current.json": {...current, kind: "live"},
-    "/feed/history.json": {...sample, kind: "live"},
+    "/feed/current.json": {...current, kind: "live", deployment},
     "/references/bodega.json": reference,
     "/references/valles-caldera.json": {
       ...reference, source: {...reference.source, id: "valles-caldera"},
     },
   };
+  for (const cadence of cadences)
+    fixture[`/feed/history/${cadence}.json`] = {...sample[cadence], kind: "live", deployment};
   for (const [key, offset] of [["bodega", -DAY], ["valles-caldera", 0]]) {
     const through = new Date(anchor + offset).toISOString();
     fixture[`/references/hourly/${key}.json`] = {
       schema_version: 1, kind: "reference", through,
       source: {...reference.source, id: key},
-      hourly: sample.hourly.filter(({at}) => Date.parse(at) + HOUR <= anchor).map((row) => ({
+      hourly: sample.hourly.rows.filter(({at}) => Date.parse(at) + HOUR <= anchor).map((row) => ({
         ...row, at: new Date(Date.parse(row.at) + offset).toISOString(),
       })),
     };
   }
   const mime = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json"};
+  const requests = new Set();
+  const historyRequests = () => [...requests].filter((path) => path.startsWith("/feed/history/"));
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
     const file = path === "/" ? "/index.html" : path;
+    requests.add(file);
     res.setHeader("Content-Type", mime[extname(file)] ?? "application/octet-stream");
     try {
       res.end(fixture[file] ? JSON.stringify(fixture[file]) : await read(file.slice(1)));
@@ -95,7 +104,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     await once(server, "listening");
     const origin = `http://127.0.0.1:${server.address().port}`;
     config.environments.prod = {
-      ...config.environments.prod, station: origin, data: origin + "/feed/", reference_feed: origin + "/references/",
+      ...config.environments.prod, station: origin, data: "/feed/", reference_feed: origin + "/references/",
     };
     chrome = spawn(browser, [
       "--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run",
@@ -119,6 +128,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       return result.value;
     }
     await call("Page.enable");
+    await call("Emulation.setDeviceMetricsOverride", {width: 1280, height: 560, deviceScaleFactor: 1, mobile: false});
     await call("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
     const now = anchor + HOUR;
     await call("Page.addScriptToEvaluateOnNewDocument", {source: `
@@ -130,6 +140,10 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       window.chartInstance = () => window.echarts?.getInstanceByDom(document.getElementById("chart"));
     `});
     await call("Page.navigate", {url: origin});
+    await waitFor(() => evaluate('document.getElementById("temperature")?.textContent'), (text) => text && text !== "—");
+    assert.deepEqual(historyRequests(), []);
+    assert(![...requests].some((path) => path.includes("/vendor/echarts/")));
+    await evaluate('document.getElementById("chart").scrollIntoView({block: "center", behavior: "instant"})');
     const view = () => evaluate(`(() => {
       const chart = window.chartInstance?.();
       const grid = chart?.getModel()?.getComponent("grid", 0)?.coordinateSystem?.getRect();
@@ -173,6 +187,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.deepEqual(initial.bounds, [now - DAY, now]);
     assert.equal(initial.resolution, "Five-minute observations");
     assert.deepEqual(initial.series, ["Secco Spring · temperature"]);
+    assert.deepEqual(historyRequests(), ["/feed/history/recent.json"]);
     const labels = await evaluate(`(() => {
       const option = window.chartInstance().getOption();
       const series = option.series[0];
@@ -187,7 +202,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.match(labels[1], /Five minutes ending Sat, Aug 15/);
     const olderDay = [anchor - 2 * DAY, anchor - DAY];
     await setDates(olderDay);
-    const widened = await view();
+    const widened = await waitFor(view, (v) => v?.resolution === "Hourly summaries" && v.bounds[0] === olderDay[0]);
     assert.deepEqual(widened.bounds, olderDay);
     assert.equal(widened.resolution, "Hourly summaries");
     await click('[data-period="week"]');
@@ -195,7 +210,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.deepEqual(week.bounds, [now - 7 * DAY, now]);
     assert.equal(week.resolution, "Hourly summaries");
     await click('[data-period="month"]');
-    const daily = await view();
+    const daily = await waitFor(view, (v) => v?.resolution === "Daily summaries" && v.bounds[0] === now - 30 * DAY);
     assert.deepEqual(daily.bounds, [now - 30 * DAY, now]);
     assert.equal(daily.resolution, "Daily summaries");
     await click('[data-control="bodega"]');
@@ -279,12 +294,22 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.match(await seasonTooltip("Spring 2026"), /class="tooltip-coverage">100% data coverage/);
     await click('[data-metric="temperature"]');
     assert.match(await seasonTooltip("Summer 2026"), /Secco Spring · avg high:.*Bodega Marine · avg low:/);
+    await click('[data-period="month"]');
+    const nextDeployment = {...deployment, dataset_id: "browser-test-next-archive"};
+    fixture["/feed/current.json"].deployment = nextDeployment;
+    await evaluate('window.previewNow += 300000; window.refreshFeed();');
+    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Bodega Marine")) &&
+      !v.series.some((name) => name.startsWith("Secco Spring")));
+    fixture["/feed/history/daily.json"].deployment = nextDeployment;
+    await evaluate('window.previewNow += 300000; window.refreshFeed();');
+    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Secco Spring")));
     await click('[data-period="day"]');
     await click('[data-mode="sample"]');
     const sampleView = await waitFor(view, (v) => v?.domainEnd === anchor);
     assert.deepEqual(sampleView.bounds, [anchor - DAY, anchor]);
     assert.equal(sampleView.resolution, "Five-minute observations");
     await click('[data-period="month"]');
+    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Sample station") && name.endsWith("high")));
     assert.match(await evaluate('document.getElementById("control-note").textContent'),
       /Bodega Marine · through Aug 14, 2026/);
     await call("Emulation.setDeviceMetricsOverride", {width: 320, height: 900, deviceScaleFactor: 1, mobile: true});

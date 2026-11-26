@@ -1,6 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
-import { HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "./timeline.js";
+import { DAY, HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const stationFormat = (options) => new Intl.DateTimeFormat("en-US", {timeZone: settings.station.timezone, ...options});
@@ -21,13 +21,8 @@ function renderClock() {
 }
 renderClock();
 setInterval(renderClock, 1000);
-const chart = window.echarts.init($("chart"), null, { renderer: "svg" });
-// Keep the toolbox view mounted across updates. Replacing it leaves its active
-// brush listening on the same chart, so one drag can zoom several times.
-chart.setOption({
-  toolbox: {itemSize: 0, itemGap: 0, showTitle: false, feature: {dataZoom: {yAxisIndex: "none"}}},
-});
-chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
+let chart;
+let chartRequested = false;
 const chartUpdate = {replaceMerge: ["title", "grid", "legend", "tooltip", "xAxis", "yAxis", "dataZoom", "series"]};
 function sourceStyle(input) {
   const {color, pattern} = input.closest(".reference-option").dataset;
@@ -51,27 +46,34 @@ const hourlyDelay = 3 * HOUR;
 const periodDays = { day: 1, week: HOURLY_PRESET_DAYS, month: 30, year: 365, all: Infinity };
 const minute = HOUR / 60;
 const archiveStep = 5 * minute;
+const seasonCache = new WeakMap();
+const clippedRows = new WeakMap();
 const state = {
   mode: settings.default_mode,
   metric: "temperature",
   period: "day",
   units: "us",
   current: null,
-  history: null,
-  loading: false,
+  history: {},
   viewport: null,
   showStation: true,
 };
+let currentFeed = {};
+function stationFeed() {
+  const path = state.mode === "sample" ? "./data/sample/" : settings.feed;
+  return path && new URL(path, location.href);
+}
 function historyEnd() {
-  return state.mode === "sample" ? state.history?.throughTime ?? state.current?.observedAt ?? -Infinity : Date.now();
+  return state.mode === "sample" ? state.current?.observedAt ?? state.history.recent?.data?.throughTime ?? -Infinity : Date.now();
 }
 function chartCadence(end = historyEnd()) {
-  return historyCadence(periodDays[state.period], state.viewport, end, state.history?.recent?.at(-1)?.at);
+  const recentThrough = Math.max(state.current?.observedAt ?? -Infinity, state.history.recent?.data?.throughTime ?? -Infinity);
+  if (state.period === "day" && !state.viewport && recentThrough === -Infinity) return "recent";
+  return historyCadence(periodDays[state.period], state.viewport, end, recentThrough);
 }
 function supportsMetric(source, cadence) {
   return source[cadence]?.includes(state.metric) ?? false;
 }
-let requestId = 0;
 let timelineDomain = null;
 let renderWindow;
 function rememberViewport(event) {
@@ -96,8 +98,6 @@ function rememberViewport(event) {
     renderWindow(state.viewport);
   }
 }
-chart.on("datazoom", rememberViewport);
-
 function currentWindow() {
   return timelineWindow(timelineDomain, periodDays[state.period], state.viewport);
 }
@@ -194,6 +194,7 @@ function validCurrent(data) {
     data.station?.id !== settings.station.id ||
     !numeric(observedAt) ||
     !data.outdoor ||
+    (state.mode === "live" && !data.deployment?.dataset_id) ||
     typeof data.outdoor.verified !== "boolean" ||
     typeof data.outdoor.source !== "string"
   )
@@ -213,29 +214,28 @@ function validCurrent(data) {
   }
   return {...data, observedAt};
 }
-function validHistory(data) {
+function validHistory(data, cadence) {
   validEnvelope(data);
   const throughTime = parseTimestamp(data.through);
+  const recordStartedAt = parseTimestamp(data.record_started_at);
   if (
     data.station_id !== settings.station.id ||
+    data.cadence !== cadence ||
     !numeric(throughTime) ||
-    !Array.isArray(data.hourly) ||
-    !Array.isArray(data.daily) ||
-    (data.recent !== undefined && !Array.isArray(data.recent))
+    !numeric(recordStartedAt) ||
+    !Array.isArray(data.rows) ||
+    (state.mode === "live" && !data.deployment?.dataset_id)
   )
     throw new Error("The history feed is incomplete.");
-  const history = {...data, throughTime, recordStartedAt: parseTimestamp(data.record_started_at)};
-  for (const key of ["recent", "hourly", "daily"]) {
-    if (!data[key]) continue;
-    history[key] = parseRows(data[key], throughTime, (row) => {
-      for (const field of ["temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm"])
-        if (row[field] !== null && !numeric(row[field])) throw new Error("History contains an invalid value.");
-      for (const field of ["temperature_min_c", "temperature_max_c", "solar_w_m2"]) {
-        if (row[field] != null && !numeric(row[field]))
-          throw new Error("History contains an invalid optional value.");
-      }
-    });
-  }
+  const rows = parseRows(data.rows, throughTime, (row, at) => {
+    if (cadence !== "recent" && at >= throughTime) throw new Error("History includes an unfinished interval.");
+    for (const field of ["temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm"])
+      if (row[field] !== null && !numeric(row[field])) throw new Error("History contains an invalid value.");
+    for (const field of ["temperature_min_c", "temperature_max_c", "solar_w_m2"])
+      if (row[field] != null && !numeric(row[field])) throw new Error("History contains an invalid optional value.");
+  });
+  const history = {...data, throughTime, recordStartedAt, rows};
+  if (!matchesCurrentDataset(history)) throw new Error("Current observations use a different history dataset.");
   return history;
 }
 function validReference(data, key, cadence) {
@@ -260,10 +260,29 @@ function validReference(data, key, cadence) {
   });
   return {...data, [cadence]: rows};
 }
-async function readJSON(url, signal) {
-  const response = await fetch(url, { signal, cache: "no-cache" });
-  if (!response.ok) throw new Error(`Feed returned HTTP ${response.status}.`);
-  return response.json();
+function matchesCurrentDataset(history) {
+  const currentDataset = state.current?.deployment?.dataset_id;
+  return !currentDataset || history.deployment?.dataset_id === currentDataset;
+}
+async function refreshFeed(entry, url, validate) {
+  const {data, failed} = entry;
+  entry.loading = true;
+  entry.checkedAt = Date.now();
+  try {
+    const response = await fetch(url, {signal: AbortSignal.timeout(15000), cache: "no-cache"});
+    if (!response.ok) throw new Error(`Feed returned HTTP ${response.status}.`);
+    const etag = response.headers.get("etag");
+    if (!etag || etag !== entry.etag) {
+      entry.data = validate(await response.json());
+      entry.etag = etag;
+    }
+    entry.failed = false;
+  } catch {
+    entry.failed = true;
+  } finally {
+    entry.loading = false;
+  }
+  return !data || data !== entry.data || failed !== entry.failed;
 }
 function notice(text, error = false) {
   $("notice-text").textContent = text;
@@ -318,7 +337,7 @@ function renderCurrent() {
     label.textContent = ` ${u[label.dataset.unit]}`;
   $("observed-at").textContent = data
     ? `${data.kind === "sample" ? "Sample observation" : "Observed"} · ${timeFormat.format(data.observedAt)}`
-    : state.loading
+    : currentFeed.loading
       ? "Connecting to the selected feed…"
       : "No observation available.";
   $("provenance").textContent =
@@ -339,7 +358,7 @@ function renderStatus() {
   }
   if (!state.current) {
     status.classList.add("error");
-    status.textContent = state.loading ? "Connecting" : "Unavailable";
+    status.textContent = currentFeed.loading ? "Connecting" : "Unavailable";
     return;
   }
   const age = (Date.now() - state.current.observedAt) / 60000;
@@ -362,24 +381,43 @@ function renderStatus() {
       true,
     );
 }
+function rowsThrough(rows, cutoff) {
+  if (!rows?.length) return [];
+  if (rows.at(-1).at <= cutoff) return rows;
+  const previous = clippedRows.get(rows);
+  // A moving cutoff reuses the same rows until it crosses a reading.
+  if (previous && (previous.at(-1)?.at ?? -Infinity) <= cutoff && rows[previous.length].at > cutoff)
+    return previous;
+  const clipped = rows.filter((row) => row.at <= cutoff);
+  clippedRows.set(rows, clipped);
+  return clipped;
+}
+function groupedRows(rows, seasonal) {
+  if (!seasonal || !rows.length) return rows;
+  let summaries = seasonCache.get(rows);
+  if (!summaries) {
+    summaries = {};
+    seasonCache.set(rows, summaries);
+  }
+  return summaries[state.period] ??= seasonalRows(rows, state.period === "monsoon", settings.station.timezone);
+}
 function renderChart() {
+  if (!chartRequested) return;
+  const end = historyEnd();
+  const cadence = chartCadence(end);
+  loadHistory(cadence);
+  if (!chart) return;
   renderPeriodSelection();
   const seasonal = ["seasons", "monsoon"].includes(state.period);
   $("monsoon-source").hidden = state.period !== "monsoon";
   const days = periodDays[state.period];
-  const end = historyEnd();
-  const cadence = chartCadence(end);
   const daily = !seasonal && cadence === "daily";
   const recent = cadence === "recent";
-  const history = state.history;
+  const historyFeed = state.showStation && state.history[cadence];
+  const history = historyFeed?.data;
   const resolution = seasonal ? (state.period === "monsoon" ? "Monsoon" : "Seasonal")
     : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
-  const rowsThrough = (data, cutoff) => {
-    const rows = data?.[cadence] ?? [];
-    return rows.at(-1)?.at > cutoff ? rows.filter((row) => row.at <= cutoff) : rows;
-  };
-  const groupRows = (rows) => seasonal ? seasonalRows(rows, state.period === "monsoon", settings.station.timezone) : rows;
-  let rows = state.showStation ? groupRows(rowsThrough(history, end)) : [];
+  let rows = groupedRows(rowsThrough(history?.rows, end), seasonal);
   const {label, field, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : settings.station.name;
   const stationSubtitle = state.showStation
@@ -415,10 +453,11 @@ function renderChart() {
   const referenceInterval = hourly ? HOUR : 0;
   const selectedReferences = activeSources.map((source) => {
     const {data, failed, loading} = source.feeds[cadence];
-    const rows = rowsThrough(data, end - referenceInterval);
+    const rows = rowsThrough(data?.[cadence], end - referenceInterval);
     return {source, rows, last: rows.findLast(hasReferenceValue), loaded: Boolean(data), failed, loading};
   });
-  const comparisons = selectedReferences.flatMap(({source, rows, last}) => last ? [{source, rows: groupRows(rows)}] : []);
+  const comparisons = selectedReferences.flatMap(({source, rows, last}) =>
+    last ? [{source, rows: groupedRows(rows, seasonal)}] : []);
   const dailyAvailable = references.some((source) => source.daily.includes(state.metric));
   const controlNote = recent ? "Choose 7d or 30d to compare references."
     : !hasEligibleSource
@@ -449,9 +488,13 @@ function renderChart() {
   const endpoints = [rows, ...comparisons.map((item) => item.rows)]
     .flatMap((data) => data.length ? [data[0], data.at(-1)] : [])
     .sort((a, b) => seasonal ? a.start - b.start : a.at - b.at);
-  $("history-range").textContent = !endpoints.length ? "No history available" : seasonal
+  const range = !endpoints.length ? "No history available" : seasonal
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(endpoints[0].at)} – ${dateFormat.format(endpoints.at(-1).at)}`;
+  const stationStatus = historyFeed?.failed ? (history ? "Station refresh failed" : "Station history unavailable")
+    : recent && history && state.current && history.throughTime !== state.current.observedAt
+      ? "Station history and current observations updated at different times" : "";
+  $("history-range").textContent = [range, stationStatus].filter(Boolean).join(" · ");
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
   const stationFields = state.metric === "wind" ? [...measurementFields, ["wind_gust_m_s", "peak gust"]] : measurementFields;
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
@@ -474,7 +517,7 @@ function renderChart() {
   $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
-    const loading = state.loading || selectedReferences.some((reference) => reference.loading);
+    const loading = historyFeed?.loading || selectedReferences.some((reference) => reference.loading);
     const selectionPrompt = hasEligibleSource
       ? "Choose observations or\nreference history to display." : `Show ${stationName} to display history.`;
     const emptyMessage = !state.showStation && !showReferences ? selectionPrompt
@@ -544,7 +587,10 @@ function renderChart() {
     };
   }
   // Keep older hourly dates reachable from the rolling five-minute archive.
-  const oldestHourly = recent ? history.hourly[0]?.at : undefined;
+  const oldestHourly = recent && history ? Math.max(
+    Math.floor((history.recordStartedAt - 1) / HOUR) * HOUR,
+    Math.floor(history.throughTime / HOUR) * HOUR - 30 * DAY,
+  ) : Infinity;
   const first = Math.min(endpoints[0].at, oldestHourly ?? Infinity, state.viewport?.from ?? Infinity);
   timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), cadence};
   const view = seasonal ? null : currentWindow();
@@ -704,84 +750,63 @@ function renderChart() {
     : label.toLowerCase();
   $("chart").setAttribute("aria-label", `${resolution} ${measurement} chart for ${sources}`);
 }
-async function load({ refresh = false } = {}) {
-  const id = ++requestId;
-  const source =
-    state.mode === "sample"
-      ? new URL("./data/sample/", location.href).href
-      : settings.feed;
-  state.loading = true;
-  if (!refresh) {
-    state.current = null;
-    state.history = null;
-    renderCurrent();
-    renderChart();
-    selected("mode", state.mode);
-    notice(
-      state.mode === "sample"
-        ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
-        : "Connecting to the station feed…",
-    );
-  }
+function loadMode() {
+  const source = stationFeed();
+  currentFeed = {};
+  state.current = null;
+  state.history = {};
+  $("json-link").hidden = !source;
+  selected("mode", state.mode);
   if (!source) {
-    state.loading = false;
-    notice(
-      "The live feed is not configured for this preview address. Sample mode is available; no live readings are shown.",
-      true,
-    );
-    $("json-link").hidden = true;
-    renderCurrent();
-    renderChart();
-    return;
+    notice("Live observations are unavailable on this preview address. Sample mode is available.", true);
+  } else {
+    $("json-link").href = new URL("current.json", source);
+    notice(state.mode === "sample"
+      ? "Station readings and history are illustrative samples. Selected controls use real, attributed reference data."
+      : "Connecting to the station feed…");
+    loadCurrent();
   }
-  $("json-link").href = `${source}current.json`;
-  $("json-link").hidden = false;
-  const signal = AbortSignal.timeout(15000);
-  const [current, history] = await Promise.allSettled([
-    readJSON(`${source}current.json`, signal).then(validCurrent),
-    readJSON(`${source}history.json`, signal).then(validHistory),
-  ]);
-  if (id !== requestId) return;
-  state.loading = false;
-  if (current.status === "fulfilled") state.current = current.value;
-  if (history.status === "fulfilled") state.history = history.value;
-  if (
-    state.current?.deployment?.dataset_id &&
-    state.history?.deployment?.dataset_id !==
-      state.current.deployment.dataset_id
-  ) {
-    state.history = null;
-  }
-
+  renderCurrent();
+  renderChart();
+}
+async function loadCurrent() {
+  const entry = currentFeed;
+  const source = stationFeed();
+  if (!source || entry.loading) return;
+  await refreshFeed(entry, new URL("current.json", source), validCurrent);
+  if (entry !== currentFeed) return;
+  const previous = state.current;
+  state.current = entry.data ?? null;
+  if (previous && !matchesCurrentDataset(previous)) state.history = {};
+  for (const [cadence, cached] of Object.entries(state.history))
+    if (cached.data && !matchesCurrentDataset(cached.data)) delete state.history[cadence];
   if (state.mode === "live") {
-    if (current.status !== "fulfilled")
+    if (entry.failed)
       notice(
         state.current
-          ? "The latest refresh failed. Showing the last successfully received observation and its original timestamp."
-          : "The live observation feed is unavailable. No sample readings are substituted. Please try again later.",
+          ? "The latest refresh failed. Showing the last observation with its original timestamp."
+          : "The live observation feed is unavailable. Please try again later.",
         true,
       );
-    else if (history.status !== "fulfilled" && state.history)
-      notice("History refresh failed. Showing the previously received history and its original dates.", true);
-    else if (!state.history)
-      notice(
-        "Current observations are available; the history feed is unavailable.",
-      );
-    else if (state.history.through !== state.current.observed_at)
-      notice("Current observations and history have different update times. Each retains its original timestamp; the next refresh will check again.");
     else
       notice(
         state.current.outdoor.verified
           ? "Station observations · timestamps and sensor provenance are included in the public JSON feed."
           : "Sensor mapping is unverified. Primary temperature and humidity may come from an auxiliary sensor.",
       );
-  } else if (!state.current || !state.history)
-    notice(
-      "Sample data could not be loaded. Serve the built site over HTTP and try again.",
-      true,
-    );
+  } else if (entry.failed)
+    notice("Sample current observations could not be loaded.", true);
   renderCurrent();
   renderChart();
+}
+async function loadHistory(cadence) {
+  const source = stationFeed();
+  if (!source || !state.showStation) return;
+  const entry = state.history[cadence] ??= {};
+  const fresh = entry.checkedAt !== undefined && (state.mode === "sample" || Date.now() - entry.checkedAt < archiveStep);
+  if (entry.loading || fresh) return;
+  const changed = await refreshFeed(entry, new URL(`history/${cadence}.json`, source), (data) => validHistory(data, cadence));
+  if (changed && entry === state.history[cadence] && cadence === chartCadence() && state.showStation) renderChart();
 }
 for (const group of ["metric", "period", "units", "mode"]) {
   for (const button of document.querySelectorAll(`[data-${group}]`))
@@ -796,9 +821,9 @@ for (const group of ["metric", "period", "units", "mode"]) {
         selected("metric", state.metric);
       }
       selected(group, state[group]);
-      if (group === "mode") load();
+      if (group === "mode") loadMode();
       else {
-        renderCurrent();
+        if (group === "units") renderCurrent();
         renderChart();
       }
     });
@@ -808,19 +833,10 @@ async function loadReference(source, cadence, {maxAge = Infinity, retryFailed = 
   const now = Date.now();
   const fresh = now - entry.checkedAt < maxAge;
   if (entry.loading || (fresh && !(retryFailed && entry.failed))) return;
-  entry.checkedAt = now;
-  entry.loading = true;
   const {key} = source;
   const path = cadence === "hourly" ? `hourly/${key}.json` : `${key}.json`;
-  try {
-    const data = await readJSON(new URL(path, settings.reference_feed), AbortSignal.timeout(15000));
-    entry.data = validReference(data, key, cadence);
-    entry.failed = false;
-  } catch {
-    entry.failed = true;
-  }
-  entry.loading = false;
-  if (source.selected && cadence === chartCadence() && supportsMetric(source, cadence)) renderChart();
+  const changed = await refreshFeed(entry, new URL(path, settings.reference_feed), (data) => validReference(data, key, cadence));
+  if (changed && source.selected && cadence === chartCadence() && supportsMetric(source, cadence)) renderChart();
 }
 stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
@@ -840,15 +856,53 @@ for (const source of references) {
     renderChart();
   });
 }
-new ResizeObserver(() => chart.resize()).observe($("chart"));
+async function activateChart() {
+  if (chartRequested) return;
+  chartRequested = true;
+  renderChart();
+  try {
+    if (!window.echarts) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = new URL("./vendor/echarts/echarts.common.min.js", import.meta.url);
+        script.onload = resolve;
+        script.onerror = () => {
+          script.remove();
+          reject(new Error("Could not load ECharts"));
+        };
+        document.head.append(script);
+      });
+    }
+    chart = window.echarts.init($("chart"), null, {renderer: "svg"});
+    // Replacing the toolbox leaves its brush listening, so one drag can zoom several times.
+    chart.setOption({toolbox: {itemSize: 0, itemGap: 0, showTitle: false, feature: {dataZoom: {yAxisIndex: "none"}}}});
+    chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
+    chart.on("datazoom", rememberViewport);
+    new ResizeObserver(() => chart.resize()).observe($("chart"));
+    chartObserver.disconnect();
+    renderChart();
+  } catch {
+    chartRequested = false;
+    $("history-range").textContent = "Chart unavailable. Select History to retry.";
+  }
+}
+const chartObserver = new IntersectionObserver(([entry]) => {
+  if (entry.isIntersecting) activateChart();
+}, {rootMargin: "160px"});
+chartObserver.observe($("chart"));
+$("history").addEventListener("focusin", activateChart);
+document.querySelector('a[href="#history"]').addEventListener("click", activateChart);
 setInterval(renderStatus, 60000);
 setInterval(() => {
-  if (state.mode === "live" && !state.loading) load({ refresh: true });
+  if (state.mode === "live") loadCurrent();
+  if (!chartRequested) return;
   const cadence = chartCadence();
+  if (state.mode === "live") loadHistory(cadence);
   const maxAge = referenceRefresh[cadence];
   if (!maxAge) return;
   for (const source of references)
     if (source.selected && supportsMetric(source, cadence))
       loadReference(source, cadence, {maxAge});
 }, 300000);
-await load();
+loadMode();
+if (location.hash === "#history") activateChart();

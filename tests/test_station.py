@@ -30,7 +30,14 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         "canones_weather.publish.publishing_client",
         lambda config: SimpleNamespace(put_object=lambda **obj: uploads.append(obj)),
     )
-    publisher = {"source_root": str(public), "bucket": "test-weather", "key_prefix": "canones/"}
+    publisher = {
+        "source_root": str(public),
+        "bucket": "test-weather",
+        "key_prefix": "canones/",
+        "endpoint_url": "https://example.r2.cloudflarestorage.com",
+    }
+    state = tmp_path / "publisher"
+    history_files = ["history/daily.json", "history/hourly.json", "history/recent.json"]
 
     with weewx.manager.DaySummaryManager.open_with_create(
         database, schema=weewx.schemas.wview_extended.schema
@@ -39,9 +46,9 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         before_record = manager.getRecord(record["dateTime"])
         export(manager, record, public)
         build_site(ROOT, site)
-        publish(publisher)
+        publish(publisher, state_dir=state)
         before_current = json.loads((public / "current.json").read_text())
-        before_history = (public / "history.json").read_bytes()
+        before_history = [(public / path).read_bytes() for path in history_files]
         before_sample = json.loads((site / "canones/data/sample/current.json").read_text())
         before_config = json.loads((site / "canones/assets/site-config.json").read_text())
         before_page = (site / "canones/index.html").read_text()
@@ -52,24 +59,25 @@ def test_rename_updates_presentation_without_changing_observations_or_identity(t
         metadata_path.write_text(json.dumps(metadata))
         export(manager, record, public)
         build_site(ROOT, site)
-        publish(publisher)
+        publish(publisher, state_dir=state)
         assert manager.getRecord(record["dateTime"]) == before_record
 
     current = json.loads((public / "current.json").read_text())
     assert current["station"]["name"] == name
     before_current["station"]["name"] = name
     assert current == before_current
-    assert (public / "history.json").read_bytes() == before_history
-    assert [obj["Key"] for obj in uploads] == ["canones/history.json", "canones/current.json"] * 2
-    assert uploads[0]["Body"] == uploads[2]["Body"]
+    assert [(public / path).read_bytes() for path in history_files] == before_history
+    assert [obj["Key"] for obj in uploads] == [
+        f"canones/{path}" for path in [*history_files, "current.json", "current.json"]
+    ]
     assert json.loads(uploads[-1]["Body"]) == current
 
     sample = json.loads((site / "canones/data/sample/current.json").read_text())
     before_sample["station"]["name"] = name
     assert sample == before_sample
-    assert (site / "canones/data/sample/history.json").read_bytes() == (
-        ROOT / "site/canones/data/sample/history.json"
-    ).read_bytes()
+    for path in history_files:
+        relative_path = f"canones/data/sample/{path}"
+        assert (site / relative_path).read_bytes() == (ROOT / "site" / relative_path).read_bytes()
 
     for route, heading in [
         ("hub", f"<h3>{escape(name)}</h3>"),
