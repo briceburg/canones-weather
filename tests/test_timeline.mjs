@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DAY, HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR, calendarDayOffset, calendarDayStart, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "../site/shared/assets/timeline.js";
 
 test("a live 24h preset ends at now with stale or newly started history", () => {
   const now = Date.UTC(2026, 10, 24, 19, 35);
@@ -48,6 +48,15 @@ test("daily movement advances through a skipped hour and selects the first repea
   ]) {
     const from = Date.parse(start);
     assert.equal(from + calendarDayOffset(from, 1, "America/Denver"), Date.parse(nextDay));
+  }
+});
+
+test("the pending day starts at station midnight on both daylight saving transitions", () => {
+  for (const [now, midnight] of [
+    ["2026-03-08T18:00:00Z", "2026-03-08T07:00:00Z"],
+    ["2026-11-01T18:00:00Z", "2026-11-01T06:00:00Z"],
+  ]) {
+    assert.equal(calendarDayStart(Date.parse(now), "America/Denver"), Date.parse(midnight));
   }
 });
 

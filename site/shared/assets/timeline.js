@@ -25,7 +25,7 @@ export function shiftWindow(domain, view, offset) {
   return {from, to: from + width};
 }
 
-export function calendarDayOffset(from, direction, timeZone) {
+function changeWallTime(from, timeZone, change) {
   const format = new Intl.DateTimeFormat("en", {
     timeZone, year: "numeric", month: "numeric", day: "numeric", hourCycle: "h23",
     hour: "numeric", minute: "numeric", second: "numeric", fractionalSecondDigits: 3,
@@ -39,13 +39,22 @@ export function calendarDayOffset(from, direction, timeZone) {
     date.setUTCHours(hour, minute, second, fractionalSecond);
     return date.getTime();
   };
-  const wallTarget = wallTime(from) + direction * DAY;
-  const approximate = from + direction * DAY;
+  const wallStart = wallTime(from);
+  const wallTarget = change(wallStart);
+  const approximate = from + wallTarget - wallStart;
   // Check both offsets around a transition. Use the earlier repeated time or advance through a gap.
   const candidates = [approximate - DAY, approximate + DAY]
     .map((probe) => wallTarget + probe - wallTime(probe))
     .sort((a, b) => a - b);
-  return (candidates.find((instant) => wallTime(instant) === wallTarget) ?? candidates.at(-1)) - from;
+  return candidates.find((instant) => wallTime(instant) === wallTarget) ?? candidates.at(-1);
+}
+
+export function calendarDayOffset(from, direction, timeZone) {
+  return changeWallTime(from, timeZone, (wall) => wall + direction * DAY) - from;
+}
+
+export function calendarDayStart(from, timeZone) {
+  return changeWallTime(from, timeZone, (wall) => Math.floor(wall / DAY) * DAY);
 }
 
 export function timelineWindow({start, end}, days, view) {

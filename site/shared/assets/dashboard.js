@@ -1,6 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
-import { HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "./timeline.js";
+import { HOUR, calendarDayOffset, calendarDayStart, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -478,9 +478,10 @@ function renderChart() {
   if (state.metric === "wind") stationFields.push(["wind_gust_m_s", "peak gust"]);
   const plottedFields = stationFields.filter(([key]) => rows.some((row) => numeric(row[key])));
   const stationHasData = plottedFields.length > 0;
+  const hasStationValue = (row) => plottedFields.some(([key]) => numeric(row[key]));
   function describeCoverage(view) {
     const inWindow = (row) => !view || (row.at >= view.from && row.at <= view.to);
-    const stationInWindow = rows.some((row) => inWindow(row) && plottedFields.some(([key]) => numeric(row[key])));
+    const stationInWindow = rows.some((row) => inWindow(row) && hasStationValue(row));
     const referenceInWindow = comparisons.some((item) => item.rows.some((row) =>
       inWindow(row) && hasReferenceValue(row)));
     const subtitle = !referenceInWindow ? stationSubtitle : stationInWindow
@@ -557,6 +558,18 @@ function renderChart() {
       series.push(makeSeries(`${source.name} · ${suffix}`, key, source, item.rows));
     }
   }
+  const today = daily && state.mode === "live" ? calendarDayStart(end, settings.station.timezone) : null;
+  const todayPending = today !== null && today < end &&
+    !rows.some((row) => row.at >= today && hasStationValue(row)) &&
+    !comparisons.some((item) => item.rows.some((row) => row.at >= today && hasReferenceValue(row)));
+  if (todayPending) {
+    series[0].markArea = {
+      silent: true,
+      label: {show: false},
+      itemStyle: {color: "rgba(161,176,171,0.1)"},
+      data: [[{xAxis: today}, {xAxis: end}]],
+    };
+  }
   if (comparisons.length && stationHasData && !seasonal && numeric(history?.recordStartedAt)) {
     series[0].markLine = {
       symbol: "none", lineStyle: {color: stationStyle.color, type: "dashed"},
@@ -573,7 +586,9 @@ function renderChart() {
     const readings = describeCoverage(view);
     const format = daily ? dateFormat : timeFormat;
     const dates = format.formatRange(new Date(view.from), new Date(view.to));
-    const summary = `Showing ${dates}${readings ? "" : " · No readings in this window"}`;
+    const status = todayPending && view.to > today ? " · Today’s daily summary pending"
+      : readings ? "" : " · No readings in this window";
+    const summary = `Showing ${dates}${status}`;
     if ($("timeline-window").textContent !== summary) $("timeline-window").textContent = summary;
     $("timeline-earlier").disabled = view.from <= timelineDomain.start;
     $("timeline-later").disabled = view.to >= timelineDomain.end;

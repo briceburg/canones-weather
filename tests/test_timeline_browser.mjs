@@ -140,6 +140,8 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       return {
         bounds: [at(grid.x), at(grid.x + grid.width)],
         domainEnd: chart.getOption().xAxis[0].max,
+        summary: document.getElementById("timeline-window").textContent,
+        pendingDay: chart.getOption().series[0].markArea?.data[0].map(({xAxis}) => xAxis),
         target: [at(left - box.x), at(right - box.x)],
         x: [left, right],
         y: Math.round(box.y + grid.y + grid.height / 2),
@@ -160,6 +162,8 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     };
     const initial = await waitFor(view, (v) => v?.series.length);
     assert.deepEqual(initial.bounds, [now - 7 * DAY, now]);
+    assert.match(initial.summary, /Today’s daily summary pending/);
+    assert.deepEqual(initial.pendingDay, [Date.UTC(2026, 7, 18, 6), now]);
     await click('[data-control="bodega"]');
     await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Bodega")));
     await evaluate('document.getElementById("chart").scrollIntoView({block: "center", behavior: "instant"})');
@@ -171,6 +175,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       const midpoint = Math.round((left.x + right.x + right.width) / 2);
       await drag(midpoint, midpoint - 180 - 50 * cycle, Math.round(left.y + left.height / 2));
       const panned = await waitFor(view, (v) => v?.bounds[1] < now - DAY);
+      assert.doesNotMatch(panned.summary, /daily summary pending/);
       assert(Math.abs(panned.bounds[1] - panned.bounds[0] - 365 * DAY) <= 1);
       await drag(...(cycle % 2 ? panned.x.toReversed() : panned.x), panned.y);
       const selected = await view();
@@ -215,7 +220,10 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     await click("#show-station-history");
 
     await click('[data-period="day"]');
-    assert.deepEqual((await view()).bounds, [now + 3600000 - DAY, now + 3600000]);
+    const short = await view();
+    assert.deepEqual(short.bounds, [now + 3600000 - DAY, now + 3600000]);
+    assert.doesNotMatch(short.summary, /daily summary pending/);
+    assert.equal(short.pendingDay, undefined);
     await click('[data-control="valles-caldera"]');
     const hourly = await waitFor(view, (v) =>
       v?.series.some((name) => name.startsWith("Bodega")) && v.series.some((name) => name.startsWith("Valles Caldera")));
