@@ -899,13 +899,13 @@ p {
 .source-swatch { height: 3px; background: var(--source-swatch); }
 .source-location {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) 3.25rem;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) 3.25rem;
   align-items: center;
   min-width: 0;
   line-height: 1.25;
 }
-.source-title { display: inline-flex; align-items: center; gap: 3px; justify-self: start; white-space: nowrap; }
-.source-title label { font-size: .85rem; font-weight: 550; }
+.source-title { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; }
+.source-title label { font-size: .85rem; font-weight: 550; min-width: 0; overflow-wrap: break-word; }
 .source-place, .source-status { color: var(--muted); font-size: .72rem; white-space: nowrap; }
 .source-map {
   display: inline-grid;
@@ -922,6 +922,9 @@ p {
   border-radius: 50% 50% 50% 0;
   background: radial-gradient(circle, transparent 1.4px, currentColor 1.7px);
   transform: translateY(-1px) rotate(-45deg);
+}
+@media (forced-colors: active) {
+  .map-pin { border: 2px solid LinkText; }
 }
 .source-status { grid-column: 3; text-align: end; }
 .source-footer { display: flex; flex-wrap: wrap; column-gap: 12px; }
