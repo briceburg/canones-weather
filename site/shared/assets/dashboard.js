@@ -3,34 +3,15 @@ import { seasonalRows } from "./seasons.js";
 import { HOUR, HOURLY_PRESET_DAYS, calendarDayOffset, historyCadence, shiftWindow, timeDomain, timelineWindow, windowFromPercent } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
-const dateFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone,
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-const timeFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone,
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZoneName: "short",
-});
-const hourFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone, weekday: "short", hour: "numeric",
-});
-const recentTickFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone, weekday: "short", hour: "numeric", minute: "2-digit",
-});
-const weekdayFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone, weekday: "short",
-});
-const clockFormat = new Intl.DateTimeFormat("en-US", {
-  timeZone: settings.station.timezone,
-  hour: "numeric", hour12: true, minute: "2-digit", second: "2-digit", timeZoneName: "short",
-});
+const stationFormat = (options) => new Intl.DateTimeFormat("en-US", {timeZone: settings.station.timezone, ...options});
+const dateParts = {month: "short", day: "numeric", year: "numeric"};
+const timeParts = {hour: "numeric", minute: "2-digit", timeZoneName: "short"};
+const dateFormat = stationFormat(dateParts);
+const timeFormat = stationFormat({...dateParts, ...timeParts});
+const hourFormat = stationFormat({weekday: "short", hour: "numeric"});
+const recentTickFormat = stationFormat({weekday: "short", hour: "numeric", minute: "2-digit"});
+const weekdayFormat = stationFormat({weekday: "short"});
+const clockFormat = stationFormat({...timeParts, hour12: true, second: "2-digit"});
 function renderClock() {
   const now = new Date();
   $("station-clock").dateTime = now.toISOString();
@@ -54,15 +35,17 @@ function sourceStyle(input) {
 }
 const stationInput = $("show-station-history");
 const stationStyle = sourceStyle(stationInput);
-const referenceInputs = [...document.querySelectorAll("[data-control]")];
-const referenceSources = Object.fromEntries(referenceInputs.map((input) => [input.dataset.control, {
+const references = [...document.querySelectorAll("[data-control]")].map((input) => ({
+  input,
+  key: input.dataset.control,
   name: input.labels[0].textContent,
   daily: input.dataset.metrics.split(" "),
   hourly: input.dataset.hourlyMetrics?.split(" ") ?? [],
   status: $(`${input.id}-status`),
+  selected: false,
+  feeds: {},
   ...sourceStyle(input),
-}]));
-const referenceFeeds = {daily: new Map(), hourly: new Map()};
+}));
 const referenceRefresh = {daily: HOUR, hourly: HOUR / 4};
 const hourlyDelay = 3 * HOUR;
 const periodDays = { day: 1, week: HOURLY_PRESET_DAYS, month: 30, year: 365, all: Infinity };
@@ -77,7 +60,6 @@ const state = {
   history: null,
   loading: false,
   viewport: null,
-  controls: new Set(),
   showStation: true,
 };
 function historyEnd() {
@@ -189,6 +171,16 @@ function validEnvelope(data) {
   if (data.schema_version !== 1 || data.kind !== state.mode)
     throw new Error("The feed does not match the selected data source.");
 }
+function parseRows(rows, through, validate) {
+  let previous = -Infinity;
+  return rows.map((row) => {
+    const at = parseTimestamp(row.at);
+    if (!numeric(at) || at <= previous || at > through) throw new Error("Invalid feed timestamps");
+    previous = at;
+    validate(row, at);
+    return {...row, at};
+  });
+}
 function validCurrent(data) {
   validEnvelope(data);
   const observedAt = parseTimestamp(data.observed_at);
@@ -228,31 +220,14 @@ function validHistory(data) {
     throw new Error("The history feed is incomplete.");
   const history = {...data, throughTime, recordStartedAt: parseTimestamp(data.record_started_at)};
   for (const key of ["recent", "hourly", "daily"]) {
-    if (data[key] === undefined) continue;
-    let previous = -Infinity;
-    history[key] = data[key].map((row) => {
-      const at = parseTimestamp(row.at);
-      if (!numeric(at) || at <= previous || at > throughTime) throw new Error("History timestamps are invalid.");
-      previous = at;
-      for (const field of [
-        "temperature_c",
-        "humidity_pct",
-        "wind_speed_m_s",
-        "wind_gust_m_s",
-        "rain_mm",
-      ]) {
-        if (row[field] !== null && !numeric(row[field]))
-          throw new Error("History contains an invalid value.");
-      }
+    if (!data[key]) continue;
+    history[key] = parseRows(data[key], throughTime, (row) => {
+      for (const field of ["temperature_c", "humidity_pct", "wind_speed_m_s", "wind_gust_m_s", "rain_mm"])
+        if (row[field] !== null && !numeric(row[field])) throw new Error("History contains an invalid value.");
       for (const field of ["temperature_min_c", "temperature_max_c", "solar_w_m2"]) {
-        if (
-          row[field] !== undefined &&
-          row[field] !== null &&
-          !numeric(row[field])
-        )
+        if (row[field] != null && !numeric(row[field]))
           throw new Error("History contains an invalid optional value.");
       }
-      return {...row, at};
     });
   }
   return history;
@@ -266,12 +241,8 @@ function validReference(data, key, cadence) {
       (hourly ? !numeric(through) || data.source.type !== "observed" :
         !Number.isFinite(Date.parse(data.start_date)) || !Number.isFinite(Date.parse(data.end_date))))
     throw new Error("Invalid reference metadata");
-  let previous = -Infinity;
-  const rows = data[cadence].map((row) => {
-    const at = parseTimestamp(row.at);
-    if (!numeric(at) || at <= previous || (hourly && (at % HOUR !== 0 || at + HOUR > through)))
-      throw new Error("Invalid reference dates");
-    previous = at;
+  const rows = parseRows(data[cadence], hourly ? through - HOUR : through, (row, at) => {
+    if (hourly && at % HOUR !== 0) throw new Error("Invalid reference hour");
     for (const field of ["temperature_min_c", "temperature_max_c", "rain_mm"])
       if (row[field] !== null && !numeric(row[field])) throw new Error("Invalid reference value");
     for (const field of ["humidity_pct", "wind_speed_m_s", "solar_w_m2"])
@@ -280,7 +251,6 @@ function validReference(data, key, cadence) {
     if (numeric(row.rain_mm) && row.rain_mm < 0 || numeric(row.temperature_min_c) &&
         numeric(row.temperature_max_c) && row.temperature_min_c > row.temperature_max_c || row.humidity_pct > 100)
       throw new Error("Invalid reference range");
-    return {...row, at};
   });
   return {...data, [cadence]: rows};
 }
@@ -294,14 +264,8 @@ function notice(text, error = false) {
   $("notice").classList.toggle("error", error);
 }
 function selected(group, value) {
-  document
-    .querySelectorAll(`[data-${group}]`)
-    .forEach((button) =>
-      button.setAttribute(
-        "aria-pressed",
-        String(button.dataset[group] === value),
-      ),
-    );
+  for (const button of document.querySelectorAll(`[data-${group}]`))
+    button.setAttribute("aria-pressed", String(button.dataset[group] === value));
 }
 function renderPeriodSelection() {
   const custom = state.viewport !== null;
@@ -403,61 +367,55 @@ function renderChart() {
   const recent = cadence === "recent";
   const history = state.history;
   const resolution = seasonal ? "Seasonal" : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
-  const selectRows = (data, interval = 0) => {
-    const selectedRows = (data?.[cadence] ?? []).filter(
-      (row) => row.at + interval <= end,
-    );
-    return seasonal ? seasonalRows(selectedRows, state.period === "monsoon", settings.station.timezone) : selectedRows;
+  const rowsThrough = (data, cutoff) => {
+    const rows = data?.[cadence] ?? [];
+    return rows.at(-1)?.at > cutoff ? rows.filter((row) => row.at <= cutoff) : rows;
   };
-  let rows = state.showStation ? selectRows(history) : [];
+  const groupRows = (rows) => seasonal ? seasonalRows(rows, state.period === "monsoon", settings.station.timezone) : rows;
+  let rows = state.showStation ? groupRows(rowsThrough(history, end)) : [];
   const {label, field, convert = (value) => numeric(value) ? value : null} = metrics[state.metric];
   const stationName = state.mode === "sample" ? "Sample station" : settings.station.name;
   const stationSubtitle = state.showStation
     ? `${stationName} history · Mountain Time`
     : `${stationName} hidden · Mountain Time`;
   $("history-resolution").textContent = recent ? "Five-minute observations" : `${resolution} summaries`;
-  const feed = referenceFeeds[cadence];
-  const activeControls = [];
-  const hasEligibleSource = !recent && Object.values(referenceSources).some((source) => source[cadence].includes(state.metric));
+  const activeSources = [];
+  const supportsMetric = (source) => source[cadence]?.includes(state.metric) ?? false;
+  const hasEligibleSource = references.some(supportsMetric);
   $("reference-sources").disabled = !hasEligibleSource;
-  for (const input of referenceInputs) {
-    const key = input.dataset.control;
-    const source = referenceSources[key];
-    const {status} = source;
-    const supportsMetric = !recent && source[cadence].includes(state.metric);
-    input.disabled = !supportsMetric;
-    input.checked = supportsMetric && state.controls.has(key);
-    status.hidden = !hasEligibleSource || supportsMetric;
+  for (const source of references) {
+    const {input, status} = source;
+    const eligible = supportsMetric(source);
+    input.disabled = !eligible;
+    input.checked = eligible && source.selected;
+    status.hidden = !hasEligibleSource || eligible;
     status.textContent = cadence === "hourly" && source.daily.includes(state.metric) ? "Daily only" : "No data";
     if (status.hidden) input.removeAttribute("aria-describedby");
     else input.setAttribute("aria-describedby", status.id);
-    if (input.checked) activeControls.push(key);
+    if (input.checked) {
+      activeSources.push(source);
+      loadReference(source, cadence);
+    }
   }
-  const showReferences = activeControls.length > 0;
-  if (showReferences)
-    for (const key of activeControls)
-      if (!feed.get(key)?.checkedAt) loadReference(key, cadence);
-  $("reference-summary").textContent = "Chart source settings ↓";
-  const selectedReferences = activeControls.map((key) => feed.get(key)?.data).filter(Boolean);
+  const showReferences = activeSources.length > 0;
+  const loadedSources = activeSources.filter(({feeds}) => feeds[cadence]?.data);
   const temperatureFields = [["temperature_max_c", "high"], ["temperature_min_c", "low"]];
   const referenceFields = state.metric === "temperature" ? temperatureFields : [[field, state.metric === "rain" ? "precipitation" : label.toLowerCase()]];
   const hasReferenceValue = (row) => referenceFields.some(([key]) => numeric(row[key]));
   // A reference hour must be complete at the live or sample cutoff.
-  const referenceInterval = cadence === "hourly" ? HOUR : 0;
-  const comparisons = selectedReferences.filter((data) => data[cadence].some((row) =>
-    row.at + referenceInterval <= end && hasReferenceValue(row))).map((data) => ({
-    source: data.source,
-    rows: selectRows(data, referenceInterval),
-  }));
-  const dailyAvailable = Object.values(referenceSources).some((source) => source.daily.includes(state.metric));
+  const cutoff = cadence === "hourly" ? end - HOUR : end;
+  const comparisons = loadedSources.flatMap((source) => {
+    const rows = rowsThrough(source.feeds[cadence].data, cutoff);
+    return rows.some(hasReferenceValue) ? [{source, rows: groupRows(rows)}] : [];
+  });
+  const dailyAvailable = references.some((source) => source.daily.includes(state.metric));
   const controlNote = recent ? "Choose 7d or 30d to compare references."
     : !hasEligibleSource
     ? cadence === "hourly" && dailyAvailable ? "Choose 30d to compare this measurement in daily summaries."
       : "No references report the selected metric."
     : !showReferences ? "Select sources to compare regional weather."
-    : activeControls.map((key) => {
-      const {name} = referenceSources[key];
-      const {data, failed} = feed.get(key) ?? {};
+    : activeSources.map(({name, feeds}) => {
+      const {data, failed} = feeds[cadence];
       if (!data) return failed ? `${name} could not be loaded. Reselect to retry.` : `Loading ${name}…`;
       const last = data[cadence].findLast(hasReferenceValue);
       const hourly = cadence === "hourly";
@@ -498,7 +456,7 @@ function renderChart() {
       ? `${stationName} + reference history · Mountain Time`
       : `Reference history only · ${state.showStation ? `${stationName} has no readings in this window` : `${stationName} hidden`} · Mountain Time`;
     if ($("history-subtitle").textContent !== subtitle) $("history-subtitle").textContent = subtitle;
-    const status = controlNote + (selectedReferences.length && !referenceInWindow
+    const status = controlNote + (loadedSources.length && !referenceInWindow
       ? " · No reference observations in this window" : "");
     if ($("control-note").textContent !== status) $("control-note").textContent = status;
     return stationInWindow || referenceInWindow;
@@ -560,11 +518,10 @@ function renderChart() {
   };
   // Color and dash pattern identify the source. Stroke weight and markers distinguish highs and lows.
   const series = plottedFields.map(([key, suffix]) => makeSeries(`${stationName} · ${suffix}`, key, stationStyle));
-  for (const item of comparisons) {
-    const source = referenceSources[item.source.id];
+  for (const {source, rows} of comparisons) {
     for (const [key, suffix] of referenceFields) {
-      if (!item.rows.some((row) => numeric(row[key]))) continue;
-      series.push(makeSeries(`${source.name} · ${suffix}`, key, source, item.rows));
+      if (!rows.some((row) => numeric(row[key]))) continue;
+      series.push(makeSeries(`${source.name} · ${suffix}`, key, source, rows));
     }
   }
   if (comparisons.length && stationHasData && !seasonal && numeric(history?.recordStartedAt)) {
@@ -821,13 +778,14 @@ for (const group of ["metric", "period", "units", "mode"]) {
       }
     });
 }
-async function loadReference(key, cadence) {
-  const feeds = referenceFeeds[cadence];
-  const entry = feeds.get(key) ?? {};
-  if (entry.loading) return;
-  entry.checkedAt = Date.now();
+async function loadReference(source, cadence, {maxAge = Infinity, retryFailed = false} = {}) {
+  const entry = source.feeds[cadence] ??= {};
+  const now = Date.now();
+  const fresh = now - entry.checkedAt < maxAge;
+  if (entry.loading || (fresh && !(retryFailed && entry.failed))) return;
+  entry.checkedAt = now;
   entry.loading = true;
-  feeds.set(key, entry);
+  const {key} = source;
   const path = cadence === "hourly" ? `hourly/${key}.json` : `${key}.json`;
   try {
     const data = await readJSON(new URL(path, settings.reference_feed), AbortSignal.timeout(15000));
@@ -837,24 +795,23 @@ async function loadReference(key, cadence) {
     entry.failed = true;
   }
   entry.loading = false;
-  if (state.controls.has(key) && cadence === chartCadence()) renderChart();
+  if (source.selected && cadence === chartCadence()) renderChart();
 }
 stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
   if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
   renderChart();
 });
-for (const input of referenceInputs) {
-  const key = input.dataset.control;
+for (const source of references) {
+  const {input} = source;
   input.addEventListener("change", () => {
     if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
-    if (input.checked) {
-      state.controls.add(key);
+    source.selected = input.checked;
+    if (source.selected) {
       const cadence = chartCadence();
-      const entry = referenceFeeds[cadence]?.get(key);
-      if (entry && (entry.failed || Date.now() - entry.checkedAt >= referenceRefresh[cadence]))
-        loadReference(key, cadence);
-    } else state.controls.delete(key);
+      if (referenceRefresh[cadence])
+        loadReference(source, cadence, {maxAge: referenceRefresh[cadence], retryFailed: true});
+    }
     renderChart();
   });
 }
@@ -863,13 +820,10 @@ setInterval(renderStatus, 60000);
 setInterval(() => {
   if (state.mode === "live" && !state.loading) load({ refresh: true });
   const cadence = chartCadence();
-  const feed = referenceFeeds[cadence];
-  if (!feed) return;
-  for (const input of referenceInputs) {
-    const key = input.dataset.control;
-    const lastCheck = feed.get(key)?.checkedAt ?? 0;
-    if (input.checked && !input.matches(":disabled") && Date.now() - lastCheck >= referenceRefresh[cadence])
-      loadReference(key, cadence);
-  }
+  const maxAge = referenceRefresh[cadence];
+  if (!maxAge) return;
+  for (const source of references)
+    if (source.input.checked && !source.input.matches(":disabled"))
+      loadReference(source, cadence, {maxAge});
 }, 300000);
 await load();
