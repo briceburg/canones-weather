@@ -244,9 +244,11 @@
               </button>
             </div>
           </div>
-          <p class="small reference-summary">
-            <a id="reference-summary" href="#reference-controls">Chart source settings ↓</a>
-          </p>
+          <div class="small chart-actions">
+            <a href="#reference-controls">Compare stations ↓</a>
+            <button type="button" id="copy-chart-link">Copy chart link</button>
+            <span id="chart-link-status" role="status"></span>
+          </div>
           <div
             id="chart"
             class="chart"
@@ -269,17 +271,19 @@
                 <span id="timeline-dates-error" role="status"></span>
               </form>
             </details>
-            <p class="small timeline-help">Drag across the plot to zoom. Move or resize the timeline window below it. Select a period to reset.</p>
           </div>
           <p class="chart-description" id="chart-description" hidden></p>
           <a id="monsoon-source" class="small" href="https://www.weather.gov/abq/prepawaremonsoonhome" hidden>NWS monsoon season: June 15–September 30 ↗</a>
           <fieldset class="control-picker" id="reference-controls" tabindex="-1">
             <legend>Chart sources</legend>
             <div class="reference-grid">{{ station_option }}</div>
-            <fieldset class="reference-sources" id="reference-sources" aria-describedby="control-note" disabled>
+            <fieldset class="reference-sources" aria-describedby="control-note">
               <legend>Reference history</legend>
+              <div class="small chart-actions">
+                <a href="#history">View chart ↑</a>
+                <span id="control-note" aria-live="polite">Choose a station to compare.</span>
+              </div>
               {{ reference_groups }}
-              <p id="control-note" class="small" aria-live="polite">Select sources to compare regional weather.</p>
             </fieldset>
             <div class="source-footer small">
               <a href="https://github.com/briceburg/canones-weather/blob/main/docs/reference-data.md#station-locations">Sources, coverage &amp; methods ↗</a>

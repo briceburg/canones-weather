@@ -44,6 +44,7 @@ const references = [...document.querySelectorAll("[data-control]")].map((input) 
 const referenceRefresh = {daily: HOUR, hourly: HOUR / 4};
 const hourlyDelay = 3 * HOUR;
 const periodDays = { day: 1, week: HOURLY_PRESET_DAYS, month: 30, year: 365, all: Infinity };
+const seasonalPeriods = ["seasons", "monsoon"];
 const minute = HOUR / 60;
 const archiveStep = 5 * minute;
 const seasonCache = new WeakMap();
@@ -72,6 +73,10 @@ function chartCadence(end = historyEnd()) {
 }
 function supportsMetric(source, cadence) {
   return source[cadence]?.includes(state.metric) ?? false;
+}
+function referencePreset(source) {
+  if (supportsMetric(source, "hourly")) return "week";
+  return supportsMetric(source, "daily") ? "month" : null;
 }
 let timelineDomain = null;
 let renderWindow;
@@ -301,6 +306,49 @@ function renderPeriodSelection() {
     ? `${timeFormat.format(new Date(state.viewport.from))} – ${timeFormat.format(new Date(state.viewport.to))}`
     : "Custom history window";
 }
+function resetViewport() {
+  state.viewport = null;
+  $("timeline-dates").open = false;
+}
+function restoreChartLink() {
+  const query = new URLSearchParams(location.search);
+  const options = {
+    period: [...Object.keys(periodDays), ...seasonalPeriods], metric: Object.keys(metrics),
+    units: ["us", "metric"], mode: ["live", "sample"],
+  };
+  for (const [key, values] of Object.entries(options)) {
+    const value = query.get(key);
+    if (values.includes(value)) state[key] = value;
+    selected(key, state[key]);
+  }
+  const sources = new Set(query.getAll("source"));
+  for (const source of references) source.selected = sources.has(source.key);
+  state.showStation = stationInput.checked = query.get("station") !== "0";
+  const from = parseTimestamp(query.get("from")), to = parseTimestamp(query.get("to"));
+  if (!seasonalPeriods.includes(state.period) && from < to && from < historyEnd())
+    state.viewport = {from, to};
+}
+$("copy-chart-link").addEventListener("click", async () => {
+  const {period, metric, units, mode, showStation, viewport} = state;
+  const query = new URLSearchParams({period, metric, units, mode});
+  for (const source of references) if (source.selected) query.append("source", source.key);
+  if (!showStation) query.set("station", "0");
+  if (numeric(viewport?.from) && numeric(viewport?.to)) {
+    query.set("from", new Date(viewport.from).toISOString());
+    query.set("to", new Date(viewport.to).toISOString());
+  }
+  const url = new URL(location.href);
+  url.search = query;
+  url.hash = "history";
+  const status = $("chart-link-status");
+  try {
+    await navigator.clipboard.writeText(url.href);
+    status.textContent = "Link copied.";
+  } catch {
+    window.history.replaceState(window.history.state, "", url);
+    status.textContent = "Link is in the address bar.";
+  }
+});
 function renderCurrent() {
   const data = currentFeed.data;
   const observation = data?.outdoor ?? {};
@@ -409,7 +457,7 @@ function renderChart() {
   loadHistory(cadence);
   if (!chart) return;
   renderPeriodSelection();
-  const seasonal = ["seasons", "monsoon"].includes(state.period);
+  const seasonal = seasonalPeriods.includes(state.period);
   $("monsoon-source").hidden = state.period !== "monsoon";
   const days = periodDays[state.period];
   const daily = !seasonal && cadence === "daily";
@@ -427,16 +475,17 @@ function renderChart() {
     : `${stationName} hidden · Mountain Time`;
   $("history-resolution").textContent = recent ? "Five-minute observations" : `${resolution} summaries`;
   const activeSources = [];
-  const hasEligibleSource = references.some((source) => supportsMetric(source, cadence));
-  $("reference-sources").disabled = !hasEligibleSource;
+  let hasReferenceOptions = false;
   for (const source of references) {
     const {input, status} = source;
+    const preset = referencePreset(source);
     const eligible = supportsMetric(source, cadence);
     const active = eligible && source.selected;
-    input.disabled = !eligible;
+    hasReferenceOptions ||= Boolean(preset);
+    input.disabled = !preset;
     input.checked = active;
-    status.hidden = !hasEligibleSource || eligible;
-    status.textContent = cadence === "hourly" && source.daily.includes(state.metric) ? "Daily only" : "No data";
+    status.hidden = eligible;
+    status.textContent = preset ? (preset === "week" ? "Opens 7d" : "Opens 30d") : "No data";
     if (status.hidden) input.removeAttribute("aria-describedby");
     else input.setAttribute("aria-describedby", status.id);
     if (active) {
@@ -460,12 +509,8 @@ function renderChart() {
   });
   const comparisons = selectedReferences.flatMap(({source, rows, last}) =>
     last ? [{source, rows: groupedRows(rows, seasonal)}] : []);
-  const dailyAvailable = references.some((source) => source.daily.includes(state.metric));
-  const controlNote = recent ? "Choose 7d or 30d to compare references."
-    : !hasEligibleSource
-    ? cadence === "hourly" && dailyAvailable ? "Choose 30d to compare this measurement in daily summaries."
-      : "No references report the selected metric."
-    : !showReferences ? "Select sources to compare regional weather."
+  const controlNote = !hasReferenceOptions ? "No references report this measurement."
+    : !showReferences ? "Choose a station to compare. The picker shows when a station opens a different period."
     : selectedReferences.map(({source: {name}, last, loaded, failed, loading}) => {
       if (!loaded) return loading ? `Loading ${name}…` : `${name} could not be loaded. Reselect to retry.`;
       const coverageEnd = last && last.at + referenceInterval;
@@ -520,7 +565,7 @@ function renderChart() {
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
     const loading = historyFeed?.loading || selectedReferences.some((reference) => reference.loading);
-    const selectionPrompt = hasEligibleSource
+    const selectionPrompt = hasReferenceOptions
       ? "Choose observations or\nreference history to display." : `Show ${stationName} to display history.`;
     const emptyMessage = !state.showStation && !showReferences ? selectionPrompt
       : loading ? "Loading history…"
@@ -804,10 +849,7 @@ for (const group of ["metric", "period", "units", "mode"]) {
   for (const button of document.querySelectorAll(`[data-${group}]`))
     button.addEventListener("click", () => {
       state[group] = button.dataset[group];
-      if (group === "period" || group === "mode") {
-        state.viewport = null;
-        $("timeline-dates").open = false;
-      }
+      if (group === "period" || group === "mode") resetViewport();
       if (group === "period" && state.period === "monsoon") {
         state.metric = "rain";
         selected("metric", state.metric);
@@ -827,17 +869,22 @@ async function loadReference(source, cadence, options = {maxAge: Infinity}) {
 }
 stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
-  if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
+  if (seasonalPeriods.includes(state.period)) state.viewport = null;
   renderChart();
 });
 for (const source of references) {
   const {input} = source;
   input.addEventListener("change", () => {
-    if (["seasons", "monsoon"].includes(state.period)) state.viewport = null;
+    if (seasonalPeriods.includes(state.period)) state.viewport = null;
     source.selected = input.checked;
     if (source.selected) {
+      const preset = referencePreset(source);
+      if (preset && !supportsMetric(source, chartCadence())) {
+        state.period = preset;
+        resetViewport();
+      }
       const cadence = chartCadence();
-      if (referenceRefresh[cadence])
+      if (supportsMetric(source, cadence))
         loadReference(source, cadence, {maxAge: referenceRefresh[cadence], retryFailed: true});
     }
     renderChart();
@@ -891,5 +938,6 @@ setInterval(() => {
     if (source.selected && supportsMetric(source, cadence))
       loadReference(source, cadence, {maxAge});
 }, 300000);
+restoreChartLink();
 loadMode();
 if (location.hash === "#history") activateChart();

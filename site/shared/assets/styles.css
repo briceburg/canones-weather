@@ -887,9 +887,8 @@ p {
 .control-picker legend { font-size: .8rem; color: #a1b0ab; padding: 0 6px; }
 .control-picker p { margin: 8px 0; color: #a1b0ab; }
 
-.timeline-help { color: #a1b0ab; margin: 8px 0; }
-
-.reference-summary { margin: 10px 0; max-width: none; color: var(--muted); }
+.chart-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 8px 0; color: var(--muted); }
+.chart-actions button { padding: 0; border: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: .25em; }
 #reference-controls { scroll-margin-top: 24px; }
 
 .reference-sources {
@@ -929,7 +928,7 @@ p {
 .source-swatch { height: 3px; background: var(--source-swatch); }
 .source-location {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) 3.25rem;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) 4rem;
   align-items: center;
   min-width: 0;
   line-height: 1.25;
@@ -962,7 +961,7 @@ p {
   .reference-option { grid-template-columns: 18px 25px minmax(0, 1fr); }
   .reference-option input { align-self: start; margin-block-start: 6px; }
   .source-swatch { align-self: start; margin-block-start: 11px; }
-  .source-location { grid-template-columns: minmax(0, 1fr) 3.25rem; }
+  .source-location { grid-template-columns: minmax(0, 1fr) 4rem; }
   .source-title { grid-column: 1 / -1; }
   .source-status { grid-area: 2 / 2; }
 }
