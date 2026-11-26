@@ -45,16 +45,23 @@ PY
     exit ;;
   snapshot)
     [[ -f dist/canones/assets/site-config.json ]] || { printf 'Run bin/build-site first.\n' >&2; exit 1; }
-    mkdir -p dist/canones/data/pilot
-    for name in history current; do
-      ssh "${ssh_options[@]}" "$WEATHER_PI_SSH" \
-        "sudo -n cat /var/lib/canones-weather/pilot/public/$name.json" > "tmp/$name.json"
-      python3 -m json.tool "tmp/$name.json" > /dev/null
-    done
-    mv tmp/history.json tmp/current.json dist/canones/data/pilot/
-    python3 - <<'PY'
-import json
+    snapshot=$(mktemp -d "$PWD/tmp/pilot-snapshot.XXXXXX")
+    trap 'rm -rf -- "$snapshot"' EXIT
+    ssh "${ssh_options[@]}" "$WEATHER_PI_SSH" \
+      'sudo -n tar -C /var/lib/canones-weather/pilot/public -cf - current.json history/recent.json history/hourly.json history/daily.json' \
+      | tar -xf - -C "$snapshot"
+    python3 - "$snapshot" <<'PY'
+import json, shutil, sys
 from pathlib import Path
+snapshot = Path(sys.argv[1])
+current = json.loads((snapshot / 'current.json').read_text())
+for cadence in ['recent', 'hourly', 'daily']:
+    history = json.loads((snapshot / f'history/{cadence}.json').read_text())
+    if (history['cadence'] != cadence or history['station_id'] != current['station']['id']
+            or history['deployment'] != current['deployment']
+            or (cadence == 'recent' and history['through'] != current['observed_at'])):
+        raise SystemExit('The pilot feed changed during the copy. Run bin/pi snapshot again.')
+shutil.copytree(snapshot, 'dist/canones/data/pilot', dirs_exist_ok=True)
 p = Path('dist/canones/assets/site-config.json')
 config = json.loads(p.read_text())
 for host in ['localhost', '127.0.0.1']:

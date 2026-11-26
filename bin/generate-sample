@@ -120,14 +120,21 @@ def main():
         "schema_version": 1,
         "kind": "sample",
         "station_id": STATION["id"],
-        "through": iso(stop),
         "record_started_at": iso(datetime.combine(START, time(), ZONE).timestamp() + 300),
-        "recent": recent,
-        "hourly": hourly,
-        "daily": daily,
     }
     root = Path(__file__).resolve().parent.parent / "site/canones/data/sample"
-    for name, data in (("current", current), ("history", history)):
+    (root / "history").mkdir(exist_ok=True)
+    midnight = datetime.combine(THROUGH.astimezone(ZONE).date(), time(), ZONE).timestamp()
+    documents = [("current", current)]
+    documents.extend(
+        (f"history/{cadence}", {**history, "cadence": cadence, "through": iso(through), "rows": rows})
+        for cadence, through, rows in (
+            ("recent", stop, recent),
+            ("hourly", stop // 3600 * 3600, hourly),
+            ("daily", midnight, daily),
+        )
+    )
+    for name, data in documents:
         # Round only serialized values; summaries use unrounded inputs.
         text = json.dumps(data, separators=(",", ":"), allow_nan=False)
         document = json.loads(text, parse_float=lambda value: round(float(value), 4))

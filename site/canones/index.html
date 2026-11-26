@@ -62,9 +62,21 @@
     },
     {
       "@type": "DataDownload",
-      "name": "Local observation history",
+      "name": "Five-minute local observations",
       "encodingFormat": "application/json",
-      "contentUrl": "https://data.weather.iceburg.net/canones/history.json"
+      "contentUrl": "https://data.weather.iceburg.net/canones/history/recent.json"
+    },
+    {
+      "@type": "DataDownload",
+      "name": "Hourly local summaries",
+      "encodingFormat": "application/json",
+      "contentUrl": "https://data.weather.iceburg.net/canones/history/hourly.json"
+    },
+    {
+      "@type": "DataDownload",
+      "name": "Daily local summaries",
+      "encodingFormat": "application/json",
+      "contentUrl": "https://data.weather.iceburg.net/canones/history/daily.json"
     }
   ]
 }
@@ -338,7 +350,7 @@
               Explore local observations over time, or compare the separately
               labeled regional weather observations. Recorded here, shared with you.
             </p>
-            <p><a class="small" href="https://data.weather.iceburg.net/canones/history.json">Public station history · JSON ↗</a></p>
+            <p><a class="small" href="https://data.weather.iceburg.net/canones/history/daily.json">Public daily history · JSON ↗</a></p>
             <p id="provenance">
               Sample values only. Live sensor mapping is unverified.
             </p>
@@ -370,7 +382,6 @@
         </div>
       </footer>
     </div>
-    <script src="./assets/vendor/echarts/echarts.common.min.js"></script>
     <script type="module" src="./assets/dashboard.js"></script>
   </body>
 </html>

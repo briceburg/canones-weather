@@ -27,32 +27,37 @@ def test_archive_export_preserves_units_gaps_and_unverified_provenance(tmp_path)
         manager.addRecord(records)
         export(manager, records[-1], tmp_path / "public")
     current = json.loads((tmp_path / "public/current.json").read_text())
-    history = json.loads((tmp_path / "public/history.json").read_text())
+    history = {
+        cadence: json.loads((tmp_path / "public/history" / f"{cadence}.json").read_text())
+        for cadence in ("recent", "hourly", "daily")
+    }
     assert current["deployment"]["phase"] == "pilot"
-    assert history["record_started_at"] == time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(records[0]["dateTime"]))
-    assert current["deployment"]["dataset_id"] == history["deployment"]["dataset_id"]
+    for cadence, feed in history.items():
+        assert feed["cadence"] == cadence
+        assert feed["record_started_at"] == time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(records[0]["dateTime"]))
+        assert current["deployment"] == feed["deployment"]
     assert current["kind"] == "live"
     assert current["outdoor"]["verified"] is False
     assert current["outdoor"]["temperature_c"] is None
     assert current["outdoor"]["rain_today_mm"] is None
     assert current["observed_at"] == time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(records[-1]["dateTime"]))
-    day = history["daily"][0]
+    day = history["daily"]["rows"][0]
     assert day["temperature_c"] == pytest.approx(25.0)
     assert day["temperature_min_c"] == pytest.approx(20.0)
     assert day["temperature_max_c"] == pytest.approx(30.0)
     assert day["rain_mm"] == pytest.approx(7.62)
     assert day["solar_w_m2"] == pytest.approx(200.0)
     assert day["wind_gust_m_s"] == pytest.approx(4.4704)
-    assert any(row["temperature_c"] is None and row["rain_mm"] is None for row in history["hourly"])
+    assert any(row["temperature_c"] is None and row["rain_mm"] is None for row in history["hourly"]["rows"])
 
-    hour = next(row for row in history["hourly"] if row["temperature_c"] is not None)
+    hour = next(row for row in history["hourly"]["rows"] if row["temperature_c"] is not None)
     assert hour["temperature_c"] == pytest.approx(25.0)
     assert hour["temperature_min_c"] == pytest.approx(20.0)
     assert hour["temperature_max_c"] == pytest.approx(30.0)
-    recent = [row for row in history["recent"] if row["temperature_c"] is not None]
+    recent = [row for row in history["recent"]["rows"] if row["temperature_c"] is not None]
     assert [row["temperature_c"] for row in recent] == [20.0, 30.0]
     assert recent[0]["at"] == time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(records[0]["dateTime"]))
-    assert history["recent"][-1]["at"] == current["observed_at"]
+    assert history["recent"]["rows"][-1]["at"] == history["recent"]["through"] == current["observed_at"]
 
 
 def test_first_boundary_observation_survives_hourly_and_dst_daily_summaries(tmp_path, monkeypatch):
@@ -83,9 +88,11 @@ def test_first_boundary_observation_survives_hourly_and_dst_daily_summaries(tmp_
                 export(manager, records[-1], tmp_path / "public")
     finally:
         time.tzset()
-    history = json.loads((tmp_path / "public/history.json").read_text())
-    assert history["hourly"][0]["temperature_c"] == 10.0
-    days = history["daily"]
+    hourly = json.loads((tmp_path / "public/history/hourly.json").read_text())
+    daily = json.loads((tmp_path / "public/history/daily.json").read_text())
+    assert hourly["rows"][0]["temperature_c"] == 10.0
+    assert daily["through"] == "2026-03-10T06:00:00Z"
+    days = daily["rows"]
     assert [row["temperature_c"] for row in days] == [10.0, 25.0, None]
     assert next_midnight - midnight == 23 * 3600
     assert days[1]["at"] == "2026-03-08T07:00:00Z"
@@ -110,10 +117,10 @@ def test_daily_counter_uses_last_value_preserves_gaps_and_resets_at_midnight(tmp
         manager.addRecord(record)
         export(manager, record, tmp_path / "public")
         current = json.loads((tmp_path / "public/current.json").read_text())["outdoor"]
-        history = json.loads((tmp_path / "public/history.json").read_text())
+        recent = json.loads((tmp_path / "public/history/recent.json").read_text())
         assert current["rain_today_mm"] == pytest.approx(3.81)
         assert current["rain_today_source"] == "ws90_daily_counter"
-        assert history["recent"][0]["rain_mm"] is None
+        assert recent["rows"][0]["rain_mm"] is None
         for stamp, counter, expected, source in [
             (today + 86400, 0.40, 0.0, "local_midnight_reset"),
             (today + 86700, 0.02, 0.508, "ws90_daily_counter"),

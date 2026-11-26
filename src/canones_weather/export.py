@@ -1,7 +1,9 @@
 """Export WeeWX archive observations and summaries to the dashboard JSON format."""
 
+import json
 import logging
 import math
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,6 +18,14 @@ from canones_weather.jsonio import write_json
 from canones_weather.station import load_station
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class ExportCache:
+    """Cache closed history for one collector connection and export directory."""
+
+    revision: tuple | None = None
+    summaries: dict = field(default_factory=dict)
 
 
 def iso(timestamp):
@@ -45,9 +55,9 @@ def history_rows(manager, start, stop, interval):
             ("temperature_min_c", "outTemp", "min", "degree_C"),
             ("temperature_max_c", "outTemp", "max", "degree_C"),
         ]
-    for field, observation, aggregate, unit in fields:
+    for key, observation, aggregate, unit in fields:
         for row in rows.values():
-            row[field] = None
+            row[key] = None
         if recent:
             _, ends, values = weewx.xtypes.get_series(observation, TimeSpan(start, stop), manager)
             samples = ((stamp, (value, values[1], values[2])) for stamp, value in zip(ends[0], values[0]))
@@ -60,23 +70,47 @@ def history_rows(manager, start, stop, interval):
             )
         for timestamp, value in samples:
             if timestamp in rows and value[0] is not None:
-                rows[timestamp][field] = number(weewx.units.convert(value, unit)[0])
+                rows[timestamp][key] = number(weewx.units.convert(value, unit)[0])
     return list(rows.values())
 
 
-def export(manager, record, output_root):
+def write_changed_json(path, data):
+    try:
+        if json.loads(path.read_bytes()) == data:
+            return
+    except (FileNotFoundError, ValueError):
+        pass
+    write_json(path, data)
+
+
+def export(manager, record, output_root, *, cache=None):
+    root = Path(output_root)
+    revision = None
+    previous = {}
     # Recovery can insert old rows concurrently; all summaries need one snapshot.
     with weedb.Transaction(manager.connection):
-        current, history = documents(manager, record)
-    write_json(Path(output_root) / "history.json", history)
-    write_json(Path(output_root) / "current.json", current)
+        if cache is not None and manager.connection.dbtype == "sqlite":
+            # StdArchive uses this connection. A commit by recovery or another
+            # writer invalidates closed tiers even if the boundaries are unchanged.
+            revision = (manager.connection, manager.getSql("PRAGMA data_version")[0], root)
+            if cache.revision == revision:
+                previous = cache.summaries
+        current, history = documents(manager, record, previous)
+    for cadence, data in history.items():
+        path = root / "history" / f"{cadence}.json"
+        if data is not previous.get(cadence) or not path.is_file():
+            write_changed_json(path, data)
+    write_changed_json(root / "current.json", current)
+    if revision is not None:
+        cache.revision = revision
+        cache.summaries = {cadence: history[cadence] for cadence in ("daily", "hourly")}
 
 
-def documents(manager, record):
+def documents(manager, record, previous=None):
     station = load_station()
     metric = weewx.units.to_std_system(record, weewx.METRICWX)
     timestamp = record["dateTime"]
-    first = manager.first_timestamp
+    first = manager.firstGoodStamp()
     start = archiveDaySpan(first).start
     hourly_stop = int(timestamp // 3600) * 3600
     day_start = startOfDay(timestamp)
@@ -88,20 +122,26 @@ def documents(manager, record):
             "from the garage WN32. Sensor mapping is unverified; Wunderground/CWOP publishing is disabled."
         ),
     }
-    recent = history_rows(manager, max(int((first - 1) // 300) * 300, timestamp - 86400), timestamp, 300)
-    history = {
+    archive = {
         "deployment": deployment,
         "schema_version": 1,
         "kind": "live",
         "station_id": station["id"],
-        "through": iso(timestamp),
         "record_started_at": iso(first),
-        "recent": recent,
-        "hourly": history_rows(
-            manager, max(int((first - 1) // 3600) * 3600, hourly_stop - 30 * 86400), hourly_stop, 3600
-        ),
-        "daily": history_rows(manager, start, day_start, "day"),
     }
+    spans = {
+        "daily": (start, day_start, "day"),
+        "hourly": (max(int((first - 1) // 3600) * 3600, hourly_stop - 30 * 86400), hourly_stop, 3600),
+        "recent": (max(int((first - 1) // 300) * 300, timestamp - 86400), timestamp, 300),
+    }
+    history = {}
+    for cadence, (span_start, stop, interval) in spans.items():
+        header = {**archive, "cadence": cadence, "through": iso(stop)}
+        cached = (previous or {}).get(cadence)
+        if cached and all(cached[key] == value for key, value in header.items()):
+            history[cadence] = cached
+        else:
+            history[cadence] = {**header, "rows": history_rows(manager, span_start, stop, interval)}
     rain_today = number(metric.get("dayRain"))
     if rain_today is not None and rain_today < 0:
         rain_today = None
@@ -145,12 +185,13 @@ class JSONReport(weewx.engine.StdService):
     def __init__(self, engine, config_dict):
         super().__init__(engine, config_dict)
         self.output_root = config_dict["CanonesJSON"]["output_root"]
+        self.cache = ExportCache()
         self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
 
     def new_archive_record(self, event):
         try:
             manager = self.engine.db_binder.get_manager("wx_binding")
-            export(manager, event.record, self.output_root)
+            export(manager, event.record, self.output_root, cache=self.cache)
             log.info("Exported pilot observation at %s", iso(event.record["dateTime"]))
         except Exception:
             log.exception("JSON export failed; archive collection continues")

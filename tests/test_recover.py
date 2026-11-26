@@ -15,7 +15,7 @@ from configobj import ConfigObj
 from weeutil.weeutil import TimeSpan
 
 from canones_weather import recover
-from canones_weather.export import export
+from canones_weather.export import ExportCache, export
 
 ZONE = ZoneInfo("America/Denver")
 START = int(datetime(2026, 11, 21, 12, tzinfo=ZONE).timestamp())
@@ -108,6 +108,37 @@ def test_recovery_leaves_ambiguous_timestamps_missing():
     assert [row["dateTime"] for row in plan] == [START + 900]
     with pytest.raises(ValueError, match="unsupported SD column"):
         list(recover.sd_records("202611A.csv", body.replace(b"Wind(mph)", b"Wind(furlongs/day)"), ZONE, missing))
+
+
+def test_export_reuses_closed_tiers_until_recovery_changes_them(tmp_path):
+    database = {"driver": "weedb.sqlite", "database_name": str(tmp_path / "archive.sdb")}
+    root = tmp_path / "public"
+    daily = root / "history/daily.json"
+    hourly = root / "history/hourly.json"
+    cache = ExportCache()
+    latest = record(START + 86400 + 600)
+    with weewx.manager.DaySummaryManager.open_with_create(
+        database, schema=weewx.schemas.wview_extended.schema
+    ) as collector:
+        preceding = record(latest["dateTime"] - 300)
+        collector.addRecord([record(START + 300), preceding])
+        export(collector, preceding, root, cache=cache)
+        before = {path: path.stat().st_ino for path in (daily, hourly)}
+        collector.addRecord(latest)
+        export(collector, latest, root, cache=cache)
+        assert {path: path.stat().st_ino for path in before} == before
+        closed = {path: json.loads(path.read_bytes()) for path in before}
+        current = (root / "current.json").read_bytes()
+        with recover.RecoveryManager.open(database) as manager:
+            recovered = record(START + 600, 15) | {"_source_file": "202611A.csv", "_logged_at": START + 626}
+            assert recover.apply_recovery(manager, [recovered]) == 1
+        export(collector, latest, root, cache=cache)
+    assert (root / "current.json").read_bytes() == current
+    for path, previous in closed.items():
+        corrected = json.loads(path.read_bytes())
+        assert corrected["through"] == previous["through"]
+        assert corrected["rows"][0]["temperature_c"] == pytest.approx(9)
+        assert previous["rows"][0]["temperature_c"] == 3
 
 
 def test_failed_sd_file_retains_validated_cache_and_defers_its_month(tmp_path, monkeypatch):
