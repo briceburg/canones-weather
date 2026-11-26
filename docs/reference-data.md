@@ -3,15 +3,18 @@
 Reference history compares weather across locations: for example, Albuquerque's
 monsoon rain against Secco Spring's. Sources need not share the station's climate;
 they never backfill its archive or establish past conditions at the property.
-Select references in the dashboard to compare daily measurements in 7d, 30d, 1y,
-All history, Seasons, or Monsoon. You can also widen the 24h timeline past 24 hours to
-show daily summaries. The picker labels unavailable measurements "No data",
-disables selection in hourly history, and remembers your selections.
+Select references in the dashboard to compare daily measurements in 30d, 1yr,
+All history, Seasons, or Monsoon. Widen the hourly timeline past seven days
+to show daily summaries. In 7d, Bodega Marine and Valles Caldera offer hourly
+temperature highs and lows, precipitation, relative humidity, and solar irradiance.
+The 24h five-minute view shows the station. The picker labels sources that need
+a daily view and remembers your selections.
 Current conditions show the local station's observations.
 Sample mode can overlay the same real controls against an explicitly labeled
 synthetic station series. Its archive-start marker is illustrative, not a station
-commissioning date. Sample mode ends at its fixed fixture timestamp. Use Live
-mode for dates after the sample timeline.
+commissioning date. Sample mode ends at its fixed fixture timestamp. Recent
+hourly reference feeds may fall outside the sample window. Use Live mode to
+view their latest coverage.
 
 ## Station locations
 
@@ -20,17 +23,19 @@ Station names link to the observing sites on OpenStreetMap.
 | Station | Data source | Elevation |
 | --- | --- | --- |
 | [Abiquiu Dam, NM][abiquiu-map] (USC00290041) | NOAA daily observations with same-station RCC-ACIS reports, about 10.2 km / 6.3 mi away | 1,944.6 m |
+| [Valles Caldera, NM][valles-map] (USW00003062) | NOAA USCRN daily and hourly observations at Los Alamos 13 W, about 33 km / 21 mi away | 2,656.6 m |
 | [Albuquerque airport, NM][albuquerque-map] (USW00023050) | NOAA daily observations | 1,618.5 m |
 | [Santa Fe airport, NM][santa-fe-map] (USW00023049) | NOAA daily observations, about 68 km / 42 mi away | 1,916.3 m |
 | [Gila Hot Springs, NM][gila-hot-springs-map] (USC00293530) | RCC-ACIS cooperative station observations about 48 km / 30 mi north of Silver City. Recent reports may be preliminary. | 1,717.9 m |
 | [Downtown Charleston, SC][charleston-map] (USW00013782) | NOAA daily observations | 3 m |
 | [Crozier, VA][crozier-map] (USC00442142) | RCC-ACIS cooperative station observations. Recent reports may be preliminary. | 85.3 m |
-| [Bodega Marine Laboratory, CA][bodega-map] (USW00093245) | NOAA U.S. Climate Reference Network daily observations, coastal Sonoma County | 19.2 m |
+| [Bodega Marine Laboratory, CA][bodega-map] (USW00093245) | NOAA U.S. Climate Reference Network daily and hourly observations, coastal Sonoma County | 19.2 m |
 | [Milwaukee Mitchell Airport, WI][milwaukee-map] (USW00014839) | NOAA daily observations in the Lake Michigan region | 203.3 m |
 | [Port de Sóller, Mallorca][soller-map] (B051A) | AEMET OpenData daily observations from September 2020 in the exported record | 5 m |
 | [Secco Spring, NM][secco-map] | Local station, with provenance and pilot status in its JSON | 2,151.888 m |
 
 [abiquiu-map]: https://www.openstreetmap.org/?mlat=36.2403&mlon=-106.4278#map=14/36.2403/-106.4278
+[valles-map]: https://www.openstreetmap.org/?mlat=35.8584&mlon=-106.5214#map=14/35.8584/-106.5214
 [albuquerque-map]: https://www.openstreetmap.org/?mlat=35.0419&mlon=-106.6156#map=14/35.0419/-106.6156
 [santa-fe-map]: https://www.openstreetmap.org/?mlat=35.6108&mlon=-106.0958#map=14/35.6108/-106.0958
 [gila-hot-springs-map]: https://www.openstreetmap.org/?mlat=33.1975&mlon=-108.2075#map=14/33.1975/-108.2075
@@ -43,6 +48,7 @@ Station names link to the observing sites on OpenStreetMap.
 
 Abiquiu Dam is about 207 m below Secco Spring. Gila Hot Springs is about 434 m
 below Secco Spring and provides a southwestern New Mexico monsoon comparison.
+Valles Caldera is about 505 m higher and provides a mountain comparison.
 Differences in terrain, elevation, exposure, and storms are part of these comparisons.
 
 Use Albuquerque and Santa Fe airports for recent regional daily temperature and
@@ -59,7 +65,7 @@ equivalent.
 | Additional daily metric | Reference stations | Provider fields |
 | --- | --- | --- |
 | Average wind speed (m/s) | Albuquerque, Santa Fe, Downtown Charleston, Milwaukee, Port de Sóller | NOAA GHCN-Daily `AWND`, AEMET `velmedia` |
-| Average relative humidity (%) | Bodega Marine, Port de Sóller | NOAA USCRN `RH_DAILY_AVG`, AEMET `hrMedia` |
+| Average relative humidity (%) | Valles Caldera, Bodega Marine, Port de Sóller | NOAA USCRN `RH_DAILY_AVG`, AEMET `hrMedia` |
 
 The peak gust series comes from Secco Spring. Wind exposure and sensor heights
 vary by site.
@@ -70,7 +76,7 @@ and [AEMET daily climatology fields](https://opendata.aemet.es/opendata/sh/b3aa9
 
 Daily timestamps label the provider's reporting date in America/Denver. Crozier
 and Gila Hot Springs retain their cooperative observer reporting dates. Bodega
-retains the USCRN local standard time calendar. Port de Sóller retains AEMET reporting dates and its
+and Valles Caldera retain the USCRN local standard time calendar. Port de Sóller retains AEMET reporting dates and its
 07:00–07:00 precipitation reporting period. NOAA missing values,
 quality-flagged values, and presumed-zero measurements are excluded. Trace
 precipitation remains a flagged zero and is identified in daily tooltips.
@@ -89,27 +95,32 @@ The collector must export `record_started_at` for this marker to appear; it is
 never inferred from the oldest point in a rolling window. Imported values never
 enter WeeWX or Wunderground/CWOP submissions.
 
-## Hourly comparison criteria
+## Hourly comparison
 
-The dashboard currently uses Secco Spring's hourly archive and daily reference
-feeds. NOAA publishes upstream hourly records for Bodega Marine, Albuquerque
-airport, and Santa Fe airport. USCRN provides Bodega's hourly averages and
-precipitation totals with timestamps at the end of the measured hour.
+The USCRN hourly feeds cover up to 30 days. Their published timestamps identify
+the start of each completed UTC hour, one hour before NOAA's interval-end timestamp.
+Temperature extrema come from `T_MIN` and `T_MAX`. Precipitation is the measured
+hour total in mm. Relative humidity and solar irradiance are hourly means in
+percent and W/m². Failed solar and humidity flags remain in `quality_flags` and
+the affected fields are null. Missing hours appear as nulls in the chart.
+The source label shows the end of the last hour with a usable reading for the
+selected metric. In Live mode it marks that metric delayed after three hours.
+
 GHCN-Hourly combines airport reports at regular and irregular times. An airport
 temperature report is a point observation, and its nominal hourly precipitation
-can be a running total repeated across several reports. Use the documented
-reporting interval and select the final report for a cumulative interval.
+can be a running total repeated across several reports. The dashboard uses
+the airports' daily summaries.
 
 Before adding an hourly reference, verify the exact station identifier and any
 site or instrumentation changes, document the units and measurement method,
 and preserve original timestamps, source codes, and quality flags. Compare
 like measurements and preserve gaps, including missing precipitation between
-reports. Run completeness checks per metric, with a target of at least 95% of
-expected hours per advertised year and over the most recent 30 days of completed
-hours. For the 24h view, check the feed hourly for 30 days and require the latest
-usable reading to be within three hours on at least 95% of checks.
+reports. Target at least 95% of expected hours per metric across the advertised
+history. Check the hourly refresh over several weeks to measure how often the
+latest usable reading arrives within three hours. The target is 95% of checks.
 
-[USCRN hourly02 format](https://www.ncei.noaa.gov/pub/data/uscrn/products/hourly02/README.txt)
+[Valles Caldera station history](https://www.ncei.noaa.gov/access/isis/station.htm?showNotes=true&stationid=1138),
+[USCRN hourly02 format](https://www.ncei.noaa.gov/pub/data/uscrn/products/hourly02/README.txt),
 and [GHCN-Hourly documentation](https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/doc/ghcnh_DOCUMENTATION.pdf).
 
 ## Abiquiu gaps and supplemental reports
@@ -162,6 +173,7 @@ Port de Sóller observations are © AEMET. See [AEMET’s reuse terms](https://w
 
 ```sh
 uv run --env-file .env python -m canones_weather.reference --start-year 2016 --output tmp/reference
+uv run python -m canones_weather.reference --hourly --output tmp/reference
 # To publish, use uv run --group station, add --publish-config tmp/publisher.json,
 # and provide bucket-scoped credentials.
 ```
@@ -169,11 +181,16 @@ uv run --env-file .env python -m canones_weather.reference --start-year 2016 --o
 Controls are generated outside Git and served from the configured R2 reference
 feed, independently of Pages builds. The local default output is ignored
 `tmp/reference/`. Pass `--source` to refresh a single reference. The available keys
-are `abiquiu`, `albuquerque`, `santa-fe`, `gila-hot-springs`, `charleston`,
+are `abiquiu`, `valles-caldera`, `albuquerque`, `santa-fe`, `gila-hot-springs`, `charleston`,
 `crozier`, `bodega`, `milwaukee`, and `soller`. The default `all` processes every
 source independently so a failure in one source leaves the others able to refresh. Each validated file
 replaces its own R2 object only on successful upload; the last published data
 survives a failed refresh. Missing or invalid downloads are not published.
+
+With `--hourly`, the CLI writes Bodega and Valles Caldera snapshots under
+`hourly/` in the same output directory and R2 reference prefix. `start_at`
+and `through` bound the stored intervals. `available_through` gives the end of
+the latest hour with any usable reading.
 
 Without an end-year limit, the refresh uses the latest available reporting dates.
 `available_through` describes data
@@ -181,10 +198,10 @@ availability; `retrieved_at` describes the download time. The dashboard shows
 the latest date for the selected measurement and revalidates selected controls
 periodically in both modes.
 
-[The reference workflow](../.github/workflows/reference-data.yml) checks every
-reference daily, when reference code or workflow changes reach `main`, and on
-manual dispatch. Its independent matrix jobs do
-not run on the Pi or modify the weather archive. Configure repository secrets
+The [daily reference workflow](../.github/workflows/reference-data.yml) and
+[hourly reference workflow](../.github/workflows/reference-hourly.yml) have their
+own schedules and run on relevant changes to `main` or manual dispatch. The
+workflows publish references separately from the station collector. Configure repository secrets
 `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` with the existing bucket-scoped
 publisher key, and repository variable `R2_PUBLISHER_CONFIG` with the non-secret
 OpenTofu publisher output. The Sóller job uses the repository secret

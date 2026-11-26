@@ -1,4 +1,4 @@
-"""Build attributed daily comparison data without changing the station archive."""
+"""Build attributed daily and hourly comparisons without changing the station archive."""
 
 import argparse
 import json
@@ -15,7 +15,12 @@ from zoneinfo import ZoneInfo
 from canones_weather.jsonio import write_json
 
 ZONE = ZoneInfo("America/Denver")
-BODEGA_LST = timezone(timedelta(hours=-8))
+HOUR = timedelta(hours=1)
+USCRN_STATIONS = {
+    "bodega": ("CA_Bodega_6_WSW", 2008, timezone(timedelta(hours=-8))),
+    "valles-caldera": ("NM_Los_Alamos_13_W", 2004, timezone(timedelta(hours=-7))),
+}
+HOURLY_METRICS = ("temperature", "rain", "humidity", "solar")
 STATIONS = {
     "abiquiu": {
         "name": "Abiquiu Dam · NOAA + RCC-ACIS observations",
@@ -73,6 +78,15 @@ STATIONS = {
         "provider": "USCRN",
         "additional_metrics": ("humidity",),
     },
+    "valles-caldera": {
+        "name": "Valles Caldera · NOAA USCRN observations",
+        "station_id": "USW00003062",
+        "latitude": 35.8584,
+        "longitude": -106.5214,
+        "elevation_m": 2656.6,
+        "provider": "USCRN",
+        "additional_metrics": ("humidity",),
+    },
     "milwaukee": {
         "name": "Milwaukee Mitchell Airport · NOAA observations",
         "station_id": "USW00014839",
@@ -93,6 +107,16 @@ STATIONS = {
 }
 ACIS_URL = "https://data.rcc-acis.org/StnData"
 USCRN_URL = "https://www.ncei.noaa.gov/pub/data/uscrn/products/daily01/"
+USCRN_HOURLY_URL = "https://www.ncei.noaa.gov/pub/data/uscrn/products/hourly02/"
+USCRN_PRODUCT = "https://www.ncei.noaa.gov/products/land-based-station/us-climate-reference-network"
+USCRN_HOURLY_FIELDS = (
+    ("temperature_c", 9, None),
+    ("temperature_min_c", 11, None),
+    ("temperature_max_c", 10, None),
+    ("rain_mm", 12, None),
+    ("humidity_pct", 26, 27),
+    ("solar_w_m2", 13, 14),
+)
 AEMET_DAILY_URL = "https://opendata.aemet.es/opendata/api/valores/climatologicos/diarios/datos"
 AEMET_ARCHIVE_START = date(2020, 9, 1)
 FIELDS = {"TMIN": "temperature_min_c", "TMAX": "temperature_max_c", "PRCP": "rain_mm"}
@@ -216,6 +240,86 @@ def uscrn_rows(text, station_id, year, *, complete_year=False):
     return rows
 
 
+def uscrn_hourly_rows(text, station_id, year):
+    rows = {}
+    previous = datetime(year, 1, 1, tzinfo=timezone.utc) - HOUR
+    for line in text.splitlines():
+        columns = line.split()
+        if len(columns) != 38 or columns[0] != station_id[-5:]:
+            raise ValueError("Invalid USCRN hourly station record")
+        # NOAA stamps the completed hour's end, including 00:00 of the next year.
+        at = datetime.fromisoformat(f"{columns[1]}T{columns[2]}+00:00") - HOUR
+        if at <= previous or at.year != year or at.minute or at.second or at.microsecond:
+            raise ValueError("Invalid USCRN hourly reporting calendar")
+        previous = at
+        values, flags = {}, {}
+        for field, index, flag_index in USCRN_HOURLY_FIELDS:
+            value = float(columns[index])
+            if not math.isfinite(value):
+                raise ValueError("Invalid USCRN hourly observation")
+            flag = columns[flag_index] if flag_index is not None else None
+            if flag is not None:
+                flags[field] = flag
+            missing = -99999 if field == "solar_w_m2" else -9999
+            values[field] = value if value != missing and flag in (None, "0") else None
+        validate_ranges(values)
+        rows[at] = {**values, "quality_flags": flags}
+    if not rows:
+        raise ValueError("Empty USCRN hourly file")
+    return rows
+
+
+def fetch_hourly_reference(key, *, now=None):
+    now = now if now is not None else datetime.now(timezone.utc)
+    end = now.replace(minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=30)
+    station = STATIONS[key]
+    name, _, _ = USCRN_STATIONS[key]
+    rows, urls = {}, []
+    for year in range(start.year, (end - HOUR).year + 1):
+        url = f"{USCRN_HOURLY_URL}{year}/CRNH0203-{year}-{name}.txt"
+        try:
+            text = download(url)
+        except HTTPError as error:
+            if error.code != 404 or end.date() != date(year, 1, 1):
+                raise
+            break
+        annual = uscrn_hourly_rows(text, station["station_id"], year)
+        rows.update((at, values) for at, values in annual.items() if start <= at < end)
+        urls.append(url)
+
+    fields = tuple(field for field, _, _ in USCRN_HOURLY_FIELDS)
+    available = [at for at, row in rows.items() if any(row[field] is not None for field in fields)]
+    if not available:
+        raise ValueError("USCRN hourly files contain no recent observations")
+    first = min(rows)
+    through = max(rows) + HOUR
+    blank = dict.fromkeys(fields)
+    hourly = []
+    at = first
+    while at < through:
+        hourly.append({"at": at.isoformat(), **rows.get(at, blank)})
+        at += HOUR
+    return {
+        "schema_version": 1,
+        "kind": "reference",
+        "source": {
+            "id": key,
+            "type": "observed",
+            **station,
+            "url": USCRN_PRODUCT,
+            "download_urls": urls,
+            "citation": USCRN_HOURLY_URL + "README.txt",
+            "notes": "NOAA USCRN hourly02. UTC interval starts are one hour before NOAA's UTC timestamps.",
+        },
+        "retrieved_at": now.isoformat(),
+        "start_at": first.isoformat(),
+        "through": through.isoformat(),
+        "available_through": (max(available) + HOUR).isoformat(),
+        "hourly": hourly,
+    }
+
+
 def aemet_rows(records, station_id, start, end):
     rows = {}
     previous = start - timedelta(days=1)
@@ -283,6 +387,18 @@ def aemet_reference(station_id, start, end):
     return rows, urls
 
 
+def validate_ranges(row):
+    low, high = row.get("temperature_min_c"), row.get("temperature_max_c")
+    humidity = row.get("humidity_pct")
+    nonnegative = (row.get(field) for field in ("rain_mm", "wind_speed_m_s", "solar_w_m2"))
+    if (
+        (low is not None and high is not None and low > high)
+        or (humidity is not None and not 0 <= humidity <= 100)
+        or any(value is not None and value < 0 for value in nonnegative)
+    ):
+        raise ValueError("Invalid reference observation range")
+
+
 def document(source, rows, start, end):
     daily = []
     day = start
@@ -304,15 +420,7 @@ def document(source, rows, start, end):
     if not any(map(has_observation, daily)):
         raise ValueError("Reference download contains no observations")
     for row in daily:
-        low, high = row["temperature_min_c"], row["temperature_max_c"]
-        humidity = row.get("humidity_pct")
-        nonnegative = (row.get(field) for field in ("rain_mm", "wind_speed_m_s"))
-        if (
-            (low is not None and high is not None and low > high)
-            or (humidity is not None and not 0 <= humidity <= 100)
-            or any(value is not None and value < 0 for value in nonnegative)
-        ):
-            raise ValueError("Invalid reference observation range")
+        validate_ranges(row)
     return {
         "schema_version": 1,
         "kind": "reference",
@@ -349,7 +457,9 @@ def fetch_reference(key, args):
     start = date(args.start_year, 1, 1)
     station = STATIONS[key]
     provider = station.get("provider")
-    reporting_zone = {"AEMET": ZoneInfo("Europe/Madrid"), "USCRN": BODEGA_LST}.get(provider)
+    reporting_zone = (
+        USCRN_STATIONS[key][2] if provider == "USCRN" else (ZoneInfo("Europe/Madrid") if provider == "AEMET" else None)
+    )
     today = datetime.now(reporting_zone).date()
     end = date(args.end_year, 12, 31) if args.end_year else today - timedelta(days=1)
     source = {"id": key, "type": "observed", **station}
@@ -363,8 +473,9 @@ def fetch_reference(key, args):
         )
     elif provider == "USCRN":
         rows, urls = {}, []
-        for year in range(max(start.year, 2008), end.year + 1):
-            url = f"{USCRN_URL}{year}/CRND0103-{year}-CA_Bodega_6_WSW.txt"
+        name, first_year, _ = USCRN_STATIONS[key]
+        for year in range(max(start.year, first_year), end.year + 1):
+            url = f"{USCRN_URL}{year}/CRND0103-{year}-{name}.txt"
             try:
                 text = download(url)
             except HTTPError as error:
@@ -375,7 +486,7 @@ def fetch_reference(key, args):
             annual = uscrn_rows(text, station["station_id"], year, complete_year=date(year, 12, 31) <= end)
             rows.update((day, values) for day, values in annual.items() if start <= day <= end)
         source.update(
-            url="https://www.ncei.noaa.gov/products/land-based-station/us-climate-reference-network",
+            url=USCRN_PRODUCT,
             download_urls=urls,
             citation=USCRN_URL + "README.txt",
             notes="NOAA USCRN daily01 observations. Dates retain the station's local standard time calendar.",
@@ -399,32 +510,43 @@ def fetch_reference(key, args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", choices=[*STATIONS, "all"], default="all")
-    parser.add_argument("--start-year", type=int, default=2016)
-    parser.add_argument("--end-year", type=int, help="Limit to this completed year; otherwise use available data")
+    parser.add_argument("--hourly", action="store_true", help="Refresh the rolling 30-day USCRN hourly feeds")
+    parser.add_argument("--start-year", type=int, default=2016, help="First year for daily history")
+    parser.add_argument("--end-year", type=int, help="Last completed year for daily history")
     parser.add_argument("--output", type=Path, default=Path("tmp/reference"))
     parser.add_argument("--publish-config", type=Path, help="Publish validated references to this R2 destination")
     args = parser.parse_args()
+    sources = USCRN_STATIONS if args.hourly else STATIONS
+    if args.source != "all" and args.source not in sources:
+        parser.error("--hourly requires a USCRN source")
     if not 1 <= args.start_year <= (args.end_year or date.today().year) or (
         args.end_year and args.end_year >= date.today().year
     ):
         parser.error("Invalid year range; an explicit end year must be completed")
     config = json.loads(args.publish_config.read_text()) if args.publish_config else None
     failed = False
-    for key in STATIONS if args.source == "all" else [args.source]:
+    for key in sources if args.source == "all" else [args.source]:
         try:
-            data = fetch_reference(key, args)
-            body = write_json(args.output / f"{key}.json", data)
+            if args.hourly:
+                data = fetch_hourly_reference(key)
+                path = f"hourly/{key}.json"
+                start, end = data["start_at"], data["through"]
+            else:
+                data = fetch_reference(key, args)
+                path = f"{key}.json"
+                start, end = data["start_date"], data["end_date"]
+            body = write_json(args.output / path, data)
             if config:
                 from canones_weather.publish import publishing_client
 
                 publishing_client(config).put_object(
                     Bucket=config["bucket"],
-                    Key=f"{config['key_prefix'].strip('/')}/reference/{key}.json",
+                    Key=f"{config['key_prefix'].strip('/')}/reference/{path}",
                     Body=body,
                     ContentType="application/json",
-                    CacheControl="public, max-age=3600",
+                    CacheControl="public, max-age=900" if args.hourly else "public, max-age=3600",
                 )
-            print(f"{key}: {data['start_date']} through {data['end_date']}")
+            print(f"{key}: {start} through {end}")
         except Exception as error:
             print(f"{key} refresh failed: {error}", file=sys.stderr)
             failed = True

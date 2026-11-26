@@ -32,20 +32,22 @@ see the [Pi guide](../deploy/raspberry-pi/README.md).
 
 ## Charts
 
-Select temperature, humidity, wind, rain, or solar irradiance. The 24h view uses
-station hourly summaries. The default 7d view gives daily reference reports a
-few days to arrive. The 7d, 30d, 1y, and All history views use daily summaries,
-including temperature lows and highs. Seasons and Monsoon aggregate daily records.
+Select temperature, humidity, wind, rain, or solar irradiance. The default 24h
+view uses five-minute station observations. It switches to hourly summaries
+when panned outside the five-minute archive or widened past 24 hours. The 7d
+view starts with hourly summaries, with Bodega Marine and Valles Caldera
+available for selected measurements. Windows wider than 7 days and the 30d,
+1yr (365 days), and All history presets use daily summaries. Seasons and Monsoon
+aggregate daily records.
 The data feed also includes a measured temperature mean.
 Display units do not change stored data; see [the data contract](../docs/data.md).
 
 Live presets end at the visitor's current time and show gaps if observations
 are missing. Sample presets end at the sample timestamp. Drag the timeline
-window to pan without changing its width. Earlier and Later step by an hour
-in hourly views and by a station-local calendar day in daily views. Drag the
+window to pan without changing its width. Earlier and Later step by the current
+interval, using the station's local calendar for daily views. Drag the
 handles, select across the plot, or open Set date range to enter both ends in
-UTC. Widening a 24h window beyond 24 hours switches it to daily summaries and
-enables compatible references.
+UTC. Short-range chart labels and tooltips show weekdays in Mountain Time.
 A custom window retains its dates across measurement changes, unit changes, and
 feed refreshes.
 Select a period or data mode to reset it.
@@ -99,8 +101,8 @@ The sample generator uses only Python's standard library.
 
 The chart-source checkboxes select station observations and references under
 Regional, Coastal, and Places of Excellence in Sample or Live mode.
-The chart starts with station observations. Daily and seasonal views offer
-temperature, precipitation, wind, and humidity references where available.
+The chart starts with station observations. Reference availability depends on
+the measurement and the chart's hourly or daily resolution.
 Selections persist in other views. Hide station observations for a reference-only
 chart. The picker swatches match each source's chart color and dash pattern.
 Temperature highs use a heavier line and lows use a lighter line in the same

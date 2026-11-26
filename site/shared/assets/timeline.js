@@ -1,9 +1,16 @@
 export const HOUR = 3600000;
 export const DAY = 24 * HOUR;
+export const HOURLY_PRESET_DAYS = 7;
 
-export function usesDailyHistory(presetDays, view) {
+export function historyCadence(presetDays, view, end, recentThrough) {
+  const from = view?.from ?? end - presetDays * DAY;
+  const width = view ? view.to - view.from : presetDays * DAY;
   // Allow one millisecond of rounding at the two slider endpoints.
-  return presetDays > 1 || (view != null && view.to - view.from > DAY + 1);
+  if (presetDays === undefined || presetDays > HOURLY_PRESET_DAYS || width > HOURLY_PRESET_DAYS * DAY + 1)
+    return "daily";
+  if (presetDays === 1 && width <= DAY + 1 && from >= recentThrough - DAY - 1 && from < recentThrough)
+    return "recent";
+  return "hourly";
 }
 
 export function timeDomain(first, now, days) {

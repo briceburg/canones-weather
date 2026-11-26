@@ -7,7 +7,7 @@ import {tmpdir} from "node:os";
 import {extname, join} from "node:path";
 import test from "node:test";
 import {setTimeout as delay} from "node:timers/promises";
-import { DAY } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR } from "../site/shared/assets/timeline.js";
 
 const browser = ["chromium", "chromium-browser", "google-chrome"]
   .find((command) => spawnSync(command, ["--version"], {stdio: "ignore"}).status === 0);
@@ -45,6 +45,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
   const root = new URL("../dist/canones/", import.meta.url);
   const read = (name) => readFile(new URL(name, root));
   const sample = JSON.parse(await read("data/sample/history.json"));
+  const anchor = Date.parse(sample.through);
   const current = JSON.parse(await read("data/sample/current.json"));
   const config = JSON.parse(await read("assets/site-config.json"));
   const reference = {
@@ -60,7 +61,20 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     "/feed/current.json": {...current, kind: "live"},
     "/feed/history.json": {...sample, kind: "live"},
     "/references/bodega.json": reference,
+    "/references/valles-caldera.json": {
+      ...reference, source: {...reference.source, id: "valles-caldera"},
+    },
   };
+  for (const [key, offset] of [["bodega", -DAY], ["valles-caldera", 0]]) {
+    const through = new Date(anchor + offset).toISOString();
+    fixture[`/references/hourly/${key}.json`] = {
+      schema_version: 1, kind: "reference", through,
+      source: {...reference.source, id: key},
+      hourly: sample.hourly.filter(({at}) => Date.parse(at) + HOUR <= anchor).map((row) => ({
+        ...row, at: new Date(Date.parse(row.at) + offset).toISOString(),
+      })),
+    };
+  }
   const mime = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json"};
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
@@ -105,7 +119,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     }
     await call("Page.enable");
     await call("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
-    const now = Date.parse(sample.through) + 3 * DAY;
+    const now = anchor + HOUR;
     await call("Page.addScriptToEvaluateOnNewDocument", {source: `
       window.previewNow = ${now};
       Date.now = () => window.previewNow;
@@ -126,6 +140,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       return {
         bounds: [at(grid.x), at(grid.x + grid.width)],
         domainEnd: chart.getOption().xAxis[0].max,
+        resolution: document.getElementById("history-resolution").textContent,
         target: [at(left - box.x), at(right - box.x)],
         x: [left, right],
         y: Math.round(box.y + grid.y + grid.height / 2),
@@ -136,6 +151,15 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       };
     })()`);
     const click = (selector) => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+    async function setDates([from, to]) {
+      await click("#timeline-dates summary");
+      await waitFor(() => evaluate('document.getElementById("timeline-from").value'), Boolean);
+      await evaluate(`
+        document.getElementById("timeline-from").valueAsNumber = ${from};
+        document.getElementById("timeline-to").valueAsNumber = ${to};
+        document.getElementById("timeline-dates-form").requestSubmit();
+      `);
+    }
     const drag = async (start, end, y) => {
       await call("Input.dispatchMouseEvent", {type: "mouseMoved", x: start, y});
       await call("Input.dispatchMouseEvent", {type: "mousePressed", x: start, y, button: "left", buttons: 1, clickCount: 1});
@@ -145,7 +169,34 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
       await call("Input.dispatchMouseEvent", {type: "mouseReleased", x: end, y, button: "left", clickCount: 1});
     };
     const initial = await waitFor(view, (v) => v?.series.length);
-    assert.deepEqual(initial.bounds, [now - 7 * DAY, now]);
+    assert.deepEqual(initial.bounds, [now - DAY, now]);
+    assert.equal(initial.resolution, "Five-minute observations");
+    assert.deepEqual(initial.series, ["Secco Spring · temperature"]);
+    const labels = await evaluate(`(() => {
+      const option = window.chartInstance().getOption();
+      const series = option.series[0];
+      const dataIndex = series.data.length - 1;
+      const value = series.data[dataIndex];
+      return [
+        option.xAxis[0].axisLabel.formatter(value[0]),
+        option.tooltip[0].formatter([{value, dataIndex, seriesName: series.name, marker: ""}]),
+      ];
+    })()`);
+    assert.match(labels[0], /Sat/);
+    assert.match(labels[1], /Five minutes ending Sat, Aug 15/);
+    const olderDay = [anchor - 2 * DAY, anchor - DAY];
+    await setDates(olderDay);
+    const widened = await view();
+    assert.deepEqual(widened.bounds, olderDay);
+    assert.equal(widened.resolution, "Hourly summaries");
+    await click('[data-period="week"]');
+    const week = await view();
+    assert.deepEqual(week.bounds, [now - 7 * DAY, now]);
+    assert.equal(week.resolution, "Hourly summaries");
+    await click('[data-period="month"]');
+    const daily = await view();
+    assert.deepEqual(daily.bounds, [now - 30 * DAY, now]);
+    assert.equal(daily.resolution, "Daily summaries");
     await click('[data-control="bodega"]');
     await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Bodega")));
     await evaluate('document.getElementById("chart").scrollIntoView({block: "center", behavior: "instant"})');
@@ -181,13 +232,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     }
 
     const dates = [Date.UTC(2025, 10, 10, 7), Date.UTC(2025, 10, 15, 7)];
-    await click("#timeline-dates summary");
-    await waitFor(() => evaluate('document.getElementById("timeline-from").value'), Boolean);
-    await evaluate(`
-      document.getElementById("timeline-from").valueAsNumber = ${dates[0]};
-      document.getElementById("timeline-to").valueAsNumber = ${dates[1]};
-      document.getElementById("timeline-dates-form").requestSubmit();
-    `);
+    await setDates(dates);
     assert.deepEqual((await view()).bounds, dates);
     await evaluate('window.previewNow += 3600000; window.refreshFeed();');
     const refreshed = await waitFor(view, (v) => v?.domainEnd === now + 3600000);
@@ -200,13 +245,26 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     assert.deepEqual((await view()).bounds, dates);
     await click("#show-station-history");
 
+    await click('[data-period="week"]');
+    assert.deepEqual((await view()).bounds, [now + HOUR - 7 * DAY, now + HOUR]);
+    await click('[data-control="valles-caldera"]');
+    const hourly = await waitFor(view, (v) =>
+      v?.series.some((name) => name.startsWith("Bodega")) && v.series.some((name) => name.startsWith("Valles Caldera")));
+    assert.deepEqual(hourly.bounds, [now + HOUR - 7 * DAY, now + HOUR]);
+    assert(await evaluate('document.querySelector("[data-control=santa-fe]").matches(":disabled")'));
+    assert.match(await evaluate('document.getElementById("control-note").textContent'), /Bodega Marine .*delayed/);
+    fixture["/references/hourly/valles-caldera.json"] = {};
+    await evaluate('window.previewNow += 900000; window.refreshFeed();');
+    await waitFor(() => evaluate('document.getElementById("control-note").textContent'),
+      (text) => /Valles Caldera .*refresh failed/.test(text));
+    assert((await view()).series.some((name) => name.startsWith("Valles Caldera")));
+    await click('[data-period="month"]');
+    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Valles Caldera")));
     await click('[data-period="day"]');
-    assert.deepEqual((await view()).bounds, [now + 3600000 - DAY, now + 3600000]);
-    assert(await evaluate('document.querySelector("[data-control=bodega]").matches(":disabled")'));
     await click('[data-mode="sample"]');
-    const anchor = Date.parse(sample.through);
     const sampleView = await waitFor(view, (v) => v?.domainEnd === anchor);
     assert.deepEqual(sampleView.bounds, [anchor - DAY, anchor]);
+    assert.equal(sampleView.resolution, "Five-minute observations");
   } finally {
     socket?.close();
     if (chrome && chrome.exitCode === null && chrome.signalCode === null) {

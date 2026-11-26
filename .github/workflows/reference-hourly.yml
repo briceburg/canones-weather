@@ -1,0 +1,25 @@
+name: Refresh hourly references
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/canones_weather/reference.py
+      - src/canones_weather/jsonio.py
+      - .github/workflows/reference-data.yml
+      - .github/workflows/reference-hourly.yml
+  schedule:
+    - cron: '43 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    uses: ./.github/workflows/reference-data.yml
+    with:
+      hourly: true
+    secrets:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
