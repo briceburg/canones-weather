@@ -2,7 +2,7 @@ export const HOUR = 3600000;
 export const DAY = 24 * HOUR;
 
 export function usesDailyHistory(presetDays, view) {
-  // Allow one millisecond of rounding when converting slider percentages to dates.
+  // Allow one millisecond of rounding at the two slider endpoints.
   return presetDays > 1 || (view != null && view.to - view.from > DAY + 1);
 }
 
@@ -11,7 +11,7 @@ export function timeDomain(first, now, days) {
   return {start, end: now};
 }
 
-export function visibleWindow(domain, zoom) {
+export function windowFromPercent(domain, zoom) {
   const span = domain.end - domain.start;
   return {
     from: Math.round(domain.start + span * zoom.start / 100),
@@ -48,13 +48,11 @@ export function calendarDayOffset(from, direction, timeZone) {
   return (candidates.find((instant) => wallTime(instant) === wallTarget) ?? candidates.at(-1)) - from;
 }
 
-// Keep a dragged time window stable as fresh observations extend the domain.
-export function timelineRange(domain, days, view) {
-  const span = domain.end - domain.start;
-  if (!(span > 0)) return { start: 0, end: 100 };
-  const from = view?.from ?? (Number.isFinite(days) ? domain.end - days * DAY : domain.start);
-  const to = view?.to ?? domain.end;
-  const start = Math.max(0, Math.min(100, (from - domain.start) / span * 100));
-  const end = Math.max(0, Math.min(100, (to - domain.start) / span * 100));
-  return start < end ? { start, end } : { start: 0, end: 100 };
+export function timelineWindow({start, end}, days, view) {
+  if (view) {
+    const from = Math.max(start, view.from);
+    const to = Math.min(end, view.to);
+    return from < to ? {from, to} : {from: start, to: end};
+  }
+  return {from: Math.max(start, end - days * DAY), to: end};
 }

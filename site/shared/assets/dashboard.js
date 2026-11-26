@@ -1,6 +1,6 @@
 import { settings } from "./common.js";
 import { seasonalRows } from "./seasons.js";
-import { HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "./timeline.js";
+import { HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineWindow, usesDailyHistory, windowFromPercent } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -35,6 +35,13 @@ function renderClock() {
 renderClock();
 setInterval(renderClock, 1000);
 const chart = window.echarts.init($("chart"), null, { renderer: "svg" });
+// Keep the toolbox view mounted across updates. Replacing it leaves its active
+// brush listening on the same chart, so one drag can zoom several times.
+chart.setOption({
+  toolbox: {itemSize: 0, itemGap: 0, showTitle: false, feature: {dataZoom: {yAxisIndex: "none"}}},
+});
+chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
+const chartUpdate = {replaceMerge: ["title", "grid", "legend", "tooltip", "xAxis", "yAxis", "dataZoom", "series"]};
 function sourceStyle(input) {
   const {color, pattern} = input.closest(".reference-option").dataset;
   return {color, pattern: pattern ? pattern.split(" ").map(Number) : "solid"};
@@ -48,12 +55,12 @@ const referenceSources = Object.fromEntries(referenceInputs.map((input) => [inpu
   status: $(`${input.id}-status`),
   ...sourceStyle(input),
 }]));
-const periodDays = { day: 1, month: 30, year: 365, "three-years": 1095, all: Infinity };
+const periodDays = { day: 1, week: 7, month: 30, year: 365, all: Infinity };
 const minute = HOUR / 60;
 const state = {
   mode: settings.default_mode,
   metric: "temperature",
-  period: "day",
+  period: "week",
   units: "us",
   current: null,
   history: null,
@@ -69,23 +76,37 @@ let requestId = 0;
 let timelineDomain = null;
 let renderWindow;
 function rememberViewport(event) {
-  let zoom = event.batch?.[0] ?? event;
-  if (!numeric(zoom.start) || !numeric(zoom.end)) zoom = chart.getOption().dataZoom?.[0];
-  if (!timelineDomain || !numeric(zoom?.start) || !numeric(zoom?.end)) return;
-  state.viewport = timelineDomain.seasonal ? {start: zoom.start, end: zoom.end} : visibleWindow(timelineDomain, zoom);
-  renderPeriodSelection();
-  if (timelineDomain.seasonal) return;
-  if (usesDailyHistory(periodDays[state.period], state.viewport) !== timelineDomain.daily) renderChart();
-  else renderWindow(state.viewport);
+  if (!timelineDomain) return;
+  const zoom = event.batch?.[0] ?? event;
+  if (timelineDomain.seasonal) {
+    const {start, end} = numeric(zoom.start) ? zoom : chart.getOption().dataZoom[0];
+    state.viewport = {start, end};
+    renderPeriodSelection();
+    return;
+  }
+  // Plot selection and date entry supply timestamps. The slider and wheel supply percentages.
+  const view = numeric(zoom.startValue) && numeric(zoom.endValue)
+    ? {from: zoom.startValue, to: zoom.endValue}
+    : windowFromPercent(timelineDomain, zoom);
+  if (!(view.from < view.to)) return;
+  state.viewport = timelineWindow(timelineDomain, periodDays[state.period], view);
+  if (usesDailyHistory(periodDays[state.period], state.viewport) !== timelineDomain.daily) {
+    renderChart();
+  } else {
+    renderPeriodSelection();
+    renderWindow(state.viewport);
+  }
 }
 chart.on("datazoom", rememberViewport);
 
 function currentWindow() {
-  const days = periodDays[state.period];
-  return visibleWindow(timelineDomain, timelineRange(timelineDomain, days, state.viewport));
+  return timelineWindow(timelineDomain, periodDays[state.period], state.viewport);
+}
+function zoomValues({from, to}) {
+  return {startValue: from, endValue: to};
 }
 function zoomTo(view) {
-  chart.dispatchAction({type: "dataZoom", ...timelineRange(timelineDomain, periodDays[state.period], view)});
+  chart.dispatchAction({type: "dataZoom", ...zoomValues(view)});
 }
 function moveWindow(direction) {
   const view = currentWindow();
@@ -405,7 +426,7 @@ function renderChart() {
     source: data.source,
     rows: selectRows(data),
   }));
-  const controlNote = !canCompare ? "Widen past 24h or choose 30d to compare daily references."
+  const controlNote = !canCompare ? "Choose 7d or widen the window past 24h to compare daily references."
     : !hasEligibleSource ? "No references report the selected metric."
     : !showReferences ? "Select sources to compare regional weather."
     : activeControls.map((key) => {
@@ -464,7 +485,6 @@ function renderChart() {
       : state.loading ? "Loading history…"
       : state.metric === "solar" ? "No solar observations in this period." : seasonal ? "Seasonal comparisons need daily history." : "No observations in this period.";
     timelineDomain = null;
-    chart.clear();
     chart.setOption({
       title: {
         text: emptyMessage,
@@ -472,7 +492,7 @@ function renderChart() {
         top: "center",
         textStyle: { color: "#a1b0ab", fontSize: 14, fontWeight: "normal" },
       },
-    });
+    }, chartUpdate);
     $("chart").setAttribute("aria-label", emptyMessage.replace("\n", " "));
     description.hidden = true;
     return;
@@ -530,7 +550,8 @@ function renderChart() {
   // Keep the selected dates when switching between hourly and daily records.
   const first = Math.min(endpoints[0].at, state.viewport?.from ?? Infinity);
   timelineDomain = seasonal ? {seasonal: true} : {...timeDomain(first, end, days), daily};
-  const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : timelineRange(timelineDomain, days, state.viewport);
+  const view = seasonal ? null : currentWindow();
+  const zoom = seasonal ? state.viewport ?? {start: 0, end: 100} : {...zoomValues(view), minValueSpan: 1};
   renderWindow = (view) => {
     const readings = describeCoverage(view);
     const format = daily ? dateFormat : timeFormat;
@@ -545,7 +566,7 @@ function renderChart() {
     const step = daily ? "one day" : "one hour";
     $("timeline-earlier").setAttribute("aria-label", `Move window ${step} earlier`);
     $("timeline-later").setAttribute("aria-label", `Move window ${step} later`);
-    renderWindow(visibleWindow(timelineDomain, zoom));
+    renderWindow(view);
   }
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const seasonLabel = (row) => {
@@ -566,11 +587,6 @@ function renderChart() {
       },
       aria: { enabled: true },
       grid: { left: 10, right: 16, top: 34, bottom: seasonal ? 70 : 52, containLabel: true },
-      // ECharts needs the toolbox mounted for native drag selection.
-      toolbox: {
-        itemSize: 0, itemGap: 0, showTitle: false,
-        feature: {dataZoom: {yAxisIndex: "none"}},
-      },
       legend: {
         left: 50, // Leave room for the y-axis unit.
         type: "scroll",
@@ -638,8 +654,10 @@ function renderChart() {
         {
           type: "slider",
           ...zoom,
-          // Apply a resized 24h window when the handle is released so it can change resolution.
-          realtime: state.period !== "day",
+          // Commit the slider range on release so a pan cannot keep changing
+          // the plot while the next selection is in progress.
+          realtime: false,
+          throttle: 0,
           brushSelect: seasonal,
           showDetail: seasonal,
           // ECharts bases the preview on series extents, which can end before the live axis.
@@ -659,9 +677,8 @@ function renderChart() {
       ],
       series,
     },
-    true,
+    chartUpdate,
   );
-  chart.dispatchAction({type: "takeGlobalCursor", key: "dataZoomSelect", dataZoomSelectActive: true});
   const notes = [];
   if (seasonal) notes.push("Summaries use reported days. Hover or tap to see coverage.");
   if (state.metric === "rain" && referenceHasData)
