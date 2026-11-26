@@ -45,6 +45,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
   const root = new URL("../dist/canones/", import.meta.url);
   const read = (name) => readFile(new URL(name, root));
   const sample = JSON.parse(await read("data/sample/history.json"));
+  const anchor = Date.parse(sample.through);
   const current = JSON.parse(await read("data/sample/current.json"));
   const config = JSON.parse(await read("assets/site-config.json"));
   const reference = {
@@ -60,7 +61,20 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     "/feed/current.json": {...current, kind: "live"},
     "/feed/history.json": {...sample, kind: "live"},
     "/references/bodega.json": reference,
+    "/references/valles-caldera.json": {
+      ...reference, source: {...reference.source, id: "valles-caldera"},
+    },
   };
+  for (const [key, offset] of [["bodega", 2 * DAY], ["valles-caldera", 3 * DAY]]) {
+    const through = new Date(anchor + offset).toISOString();
+    fixture[`/references/hourly/${key}.json`] = {
+      schema_version: 1, kind: "reference", through,
+      source: {...reference.source, id: key},
+      hourly: sample.hourly.filter(({at}) => Date.parse(at) + 3600000 <= anchor).map((row) => ({
+        ...row, at: new Date(Date.parse(row.at) + offset).toISOString(),
+      })),
+    };
+  }
   const mime = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json"};
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, "http://localhost").pathname;
@@ -105,7 +119,7 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
     }
     await call("Page.enable");
     await call("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
-    const now = Date.parse(sample.through) + 3 * DAY;
+    const now = anchor + 3 * DAY;
     await call("Page.addScriptToEvaluateOnNewDocument", {source: `
       window.previewNow = ${now};
       Date.now = () => window.previewNow;
@@ -202,9 +216,21 @@ test("repeated preset, slider pan, and plot drag select the dates under the poin
 
     await click('[data-period="day"]');
     assert.deepEqual((await view()).bounds, [now + 3600000 - DAY, now + 3600000]);
-    assert(await evaluate('document.querySelector("[data-control=bodega]").matches(":disabled")'));
+    await click('[data-control="valles-caldera"]');
+    const hourly = await waitFor(view, (v) =>
+      v?.series.some((name) => name.startsWith("Bodega")) && v.series.some((name) => name.startsWith("Valles Caldera")));
+    assert.deepEqual(hourly.bounds, [now + 3600000 - DAY, now + 3600000]);
+    assert(await evaluate('document.querySelector("[data-control=santa-fe]").matches(":disabled")'));
+    assert.match(await evaluate('document.getElementById("control-note").textContent'), /Bodega Marine .*delayed/);
+    fixture["/references/hourly/valles-caldera.json"] = {};
+    await evaluate('window.previewNow += 900000; window.refreshFeed();');
+    await waitFor(() => evaluate('document.getElementById("control-note").textContent'),
+      (text) => /Valles Caldera .*refresh failed/.test(text));
+    assert((await view()).series.some((name) => name.startsWith("Valles Caldera")));
+    await click('[data-period="week"]');
+    await waitFor(view, (v) => v?.series.some((name) => name.startsWith("Valles Caldera")));
+    await click('[data-period="day"]');
     await click('[data-mode="sample"]');
-    const anchor = Date.parse(sample.through);
     const sampleView = await waitFor(view, (v) => v?.domainEnd === anchor);
     assert.deepEqual(sampleView.bounds, [anchor - DAY, anchor]);
   } finally {

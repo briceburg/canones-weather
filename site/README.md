@@ -33,7 +33,8 @@ see the [Pi guide](../deploy/raspberry-pi/README.md).
 ## Charts
 
 Select temperature, humidity, wind, rain, or solar irradiance. The 24h view uses
-station hourly summaries. The default 7d view gives daily reference reports a
+hourly summaries, with Bodega Marine and Valles Caldera available for selected
+measurements. The default 7d view gives daily reference reports a
 few days to arrive. The 7d, 30d, 1y, and All history views use daily summaries,
 including temperature lows and highs. Seasons and Monsoon aggregate daily records.
 The data feed also includes a measured temperature mean.
@@ -99,8 +100,8 @@ The sample generator uses only Python's standard library.
 
 The chart-source checkboxes select station observations and references under
 Regional, Coastal, and Places of Excellence in Sample or Live mode.
-The chart starts with station observations. Daily and seasonal views offer
-temperature, precipitation, wind, and humidity references where available.
+The chart starts with station observations. Reference availability depends on
+the measurement and the chart's hourly or daily resolution.
 Selections persist in other views. Hide station observations for a reference-only
 chart. The picker swatches match each source's chart color and dash pattern.
 Temperature highs use a heavier line and lows use a lighter line in the same

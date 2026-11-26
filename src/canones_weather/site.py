@@ -5,13 +5,14 @@ import re
 import shutil
 from html import escape
 
-from canones_weather.reference import STATIONS
+from canones_weather.reference import HOURLY_METRICS, STATIONS, USCRN_STATIONS
 from canones_weather.station import load_station
 
 STATION_LOCATION = (36.150028, -106.4455)
 REFERENCE_GROUPS = {
     "Regional": (
         ("abiquiu", "Abiquiu Dam", "NM", "#66bfdc", (2, 4)),
+        ("valles-caldera", "Valles Caldera", "NM", "#a8ca77", (8, 3)),
         ("santa-fe", "Santa Fe airport", "NM", "#8ca4ff", (14, 5)),
         ("albuquerque", "Albuquerque airport", "NM", "#c3a3f8", (9, 4, 2, 4)),
         ("gila-hot-springs", "Gila Hot Springs", "NM", "#b9d878", (2, 3, 2, 7)),
@@ -35,7 +36,7 @@ def map_url(latitude, longitude, zoom=14):
 STATION_MAP_URL = map_url(*STATION_LOCATION, zoom=15)
 
 
-def source_option(key, name, place, url, color, dashes=(), *, metrics=None):
+def source_option(key, name, place, url, color, dashes=(), *, metrics=None, hourly=()):
     swatch = color
     if dashes:
         stops = []
@@ -49,6 +50,8 @@ def source_option(key, name, place, url, color, dashes=(), *, metrics=None):
     name = escape(name)
     input_id = f"reference-{key}" if metrics else "show-station-history"
     attributes = f'data-control="{key}" data-metrics="{metrics}"' if metrics else "checked"
+    if hourly:
+        attributes += f' data-hourly-metrics="{" ".join(hourly)}"'
     status = f'<span class="source-status" id="{input_id}-status" hidden>No data</span>' if metrics else ""
     return (
         f'<span class="reference-option" data-color="{color}" data-pattern="{pattern}" '
@@ -70,7 +73,8 @@ def reference_groups():
             reference = STATIONS[key]
             metrics = " ".join(("temperature", "rain", *reference.get("additional_metrics", ())))
             url = map_url(reference["latitude"], reference["longitude"])
-            groups.append(source_option(key, name, place, url, color, dashes, metrics=metrics))
+            hourly = HOURLY_METRICS if key in USCRN_STATIONS else ()
+            groups.append(source_option(key, name, place, url, color, dashes, metrics=metrics, hourly=hourly))
         groups.append("</div></fieldset>")
     return "\n".join(groups)
 

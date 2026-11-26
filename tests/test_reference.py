@@ -125,6 +125,36 @@ def test_bodega_refresh_handles_the_local_year_rollover(monkeypatch, runner_day,
     assert len(data["source"]["download_urls"]) == 1
 
 
+def test_hourly_reference_uses_completed_utc_hours_and_preserves_quality_gaps(monkeypatch):
+    def record(day, hour, solar=0, humidity_flag=0):
+        return (
+            f"03062 {day} {hour} 20251231 1700 2.622 -106.52 35.86 3.5 4.3 4.9 3.3 0.0 "
+            f"{solar} 0 0 0 0 0 C -1.3 0 -0.6 0 -2.4 0 33 {humidity_flag} "
+            "-99.000 0.247 0.209 0.266 0.244 0.7 1.1 1.5 1.9 2.3"
+        )
+
+    def download(url):
+        assert url.endswith("-NM_Los_Alamos_13_W.txt")
+        if "/2025/" in url:
+            return record("20260101", "0000", solar=-99999, humidity_flag=3)
+        return "\n".join((record("20260101", "0200", solar=123), record("20260101", "0300")))
+
+    monkeypatch.setattr(reference, "download", download)
+    now = datetime(2026, 1, 1, 2, 17, tzinfo=timezone.utc)
+    data = reference.fetch_hourly_reference("valles-caldera", now=now)
+    first, gap, last = data["hourly"]
+    assert data["source"]["station_id"] == "USW00003062"
+    assert data["through"] == data["available_through"] == "2026-01-01T02:00:00+00:00"
+    assert first["at"] == "2025-12-31T23:00:00+00:00"
+    assert first["rain_mm"] == 0 and first["temperature_min_c"] == 3.3
+    assert first["solar_w_m2"] is None and first["humidity_pct"] is None
+    assert first["quality_flags"] == {"humidity_pct": "3", "solar_w_m2": "0"}
+    assert gap["at"] == "2026-01-01T00:00:00+00:00" and gap["rain_mm"] is None
+    assert last["at"] == "2026-01-01T01:00:00+00:00" and last["solar_w_m2"] == 123
+    with pytest.raises(ValueError, match="station record"):
+        reference.uscrn_hourly_rows(record("20260101", "0200"), "USW00093245", 2026)
+
+
 def test_aemet_parses_trace_and_skips_multiday_precipitation():
     first, last = date(2026, 11, 19), date(2026, 11, 20)
     records = [
