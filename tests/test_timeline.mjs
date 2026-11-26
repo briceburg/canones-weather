@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DAY, HOUR, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "../site/shared/assets/timeline.js";
+import { DAY, HOUR, calendarDayOffset, shiftWindow, timeDomain, timelineRange, usesDailyHistory, visibleWindow } from "../site/shared/assets/timeline.js";
 
 test("a live 24h preset ends at now with stale or newly started history", () => {
   const now = Date.UTC(2026, 10, 24, 19, 35);
@@ -20,6 +20,35 @@ test("hourly and daily moves preserve the window width at both edges", () => {
   const earliest = shiftWindow(domain, monthView, -2 * DAY);
   assert.deepEqual(earliest, {from: 0, to: 30 * DAY});
   assert.deepEqual(shiftWindow(domain, earliest, 2 * DAY), monthView);
+});
+
+test("daily movement keeps the station wall-clock start across daylight saving", () => {
+  for (const [start, nextDay] of [
+    ["2026-03-08T00:00:00.125-07:00", "2026-03-09T00:00:00.125-06:00"],
+    ["2026-11-01T00:00:00.125-06:00", "2026-11-02T00:00:00.125-07:00"],
+  ]) {
+    const from = Date.parse(start);
+    const next = Date.parse(nextDay);
+    const width = 30 * DAY;
+    const view = {from, to: from + width};
+    const domain = {start: from - DAY, end: view.to + 2 * DAY};
+    const move = (window, direction) => shiftWindow(
+      domain, window, calendarDayOffset(window.from, direction, "America/Denver"),
+    );
+    const later = move(view, 1);
+    assert.deepEqual(later, {from: next, to: next + width});
+    assert.deepEqual(move(later, -1), view);
+  }
+});
+
+test("daily movement advances through a skipped hour and selects the first repeated hour", () => {
+  for (const [start, nextDay] of [
+    ["2026-03-07T02:30:00-07:00", "2026-03-08T03:30:00-06:00"],
+    ["2026-10-31T01:30:00-06:00", "2026-11-01T01:30:00-06:00"],
+  ]) {
+    const from = Date.parse(start);
+    assert.equal(from + calendarDayOffset(from, 1, "America/Denver"), Date.parse(nextDay));
+  }
 });
 
 test("panning a 24h view stays hourly and widening it enables daily comparisons", () => {

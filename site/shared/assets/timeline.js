@@ -25,6 +25,29 @@ export function shiftWindow(domain, view, offset) {
   return {from, to: from + width};
 }
 
+export function calendarDayOffset(from, direction, timeZone) {
+  const format = new Intl.DateTimeFormat("en", {
+    timeZone, year: "numeric", month: "numeric", day: "numeric", hourCycle: "h23",
+    hour: "numeric", minute: "numeric", second: "numeric", fractionalSecondDigits: 3,
+  });
+  const wallTime = (instant) => {
+    const {year, month, day, hour, minute, second, fractionalSecond} = Object.fromEntries(
+      format.formatToParts(instant).map(({type, value}) => [type, Number(value)]),
+    );
+    const date = new Date(0);
+    date.setUTCFullYear(year, month - 1, day);
+    date.setUTCHours(hour, minute, second, fractionalSecond);
+    return date.getTime();
+  };
+  const wallTarget = wallTime(from) + direction * DAY;
+  const approximate = from + direction * DAY;
+  // Check both offsets around a transition. Use the earlier repeated time or advance through a gap.
+  const candidates = [approximate - DAY, approximate + DAY]
+    .map((probe) => wallTarget + probe - wallTime(probe))
+    .sort((a, b) => a - b);
+  return (candidates.find((instant) => wallTime(instant) === wallTarget) ?? candidates.at(-1)) - from;
+}
+
 // Keep a dragged time window stable as fresh observations extend the domain.
 export function timelineRange(domain, days, view) {
   const span = domain.end - domain.start;
