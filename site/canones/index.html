@@ -53,32 +53,7 @@
     "Solar irradiance",
     "UV index"
   ],
-  "distribution": [
-    {
-      "@type": "DataDownload",
-      "name": "Current local observations",
-      "encodingFormat": "application/json",
-      "contentUrl": "https://data.weather.iceburg.net/canones/current.json"
-    },
-    {
-      "@type": "DataDownload",
-      "name": "Five-minute local observations",
-      "encodingFormat": "application/json",
-      "contentUrl": "https://data.weather.iceburg.net/canones/history/recent.json"
-    },
-    {
-      "@type": "DataDownload",
-      "name": "Hourly local summaries",
-      "encodingFormat": "application/json",
-      "contentUrl": "https://data.weather.iceburg.net/canones/history/hourly.json"
-    },
-    {
-      "@type": "DataDownload",
-      "name": "Daily local summaries",
-      "encodingFormat": "application/json",
-      "contentUrl": "https://data.weather.iceburg.net/canones/history/daily.json"
-    }
-  ]
+  "distribution": {{ observation_downloads }}
 }
     </script>
   </head>
@@ -350,7 +325,7 @@
               Explore local observations over time, or compare the separately
               labeled regional weather observations. Recorded here, shared with you.
             </p>
-            <p><a class="small" href="https://data.weather.iceburg.net/canones/history/daily.json">Public daily history · JSON ↗</a></p>
+            <p><a class="small" href="{{ daily_history_url }}">Public daily history · JSON ↗</a></p>
             <p id="provenance">
               Sample values only. Live sensor mapping is unverified.
             </p>

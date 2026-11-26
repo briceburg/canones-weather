@@ -50,20 +50,17 @@ PY
     ssh "${ssh_options[@]}" "$WEATHER_PI_SSH" \
       'sudo -n tar -C /var/lib/canones-weather/pilot/public -cf - current.json history/recent.json history/hourly.json history/daily.json' \
       | tar -xf - -C "$snapshot"
-    python3 - "$snapshot" <<'PY'
+    PYTHONPATH=src python3 - "$snapshot" <<'PY'
 import json, shutil, sys
-from datetime import datetime
 from pathlib import Path
+from canones_weather.station import HISTORY_FILES, validate_live_feed
+
 snapshot = Path(sys.argv[1])
-current = json.loads((snapshot / 'current.json').read_text())
-observed_at = datetime.fromisoformat(current['observed_at'])
-for cadence in ['recent', 'hourly', 'daily']:
-    history = json.loads((snapshot / f'history/{cadence}.json').read_text())
-    through = datetime.fromisoformat(history['through'])
-    if (history['cadence'] != cadence or history['station_id'] != current['station']['id']
-            or history['deployment'] != current['deployment']
-            or through > observed_at or (cadence == 'recent' and through != observed_at)):
-        raise SystemExit('The pilot feed changed during the copy. Run bin/pi snapshot again.')
+try:
+    validate_live_feed({path: json.loads((snapshot / path).read_bytes())
+                        for path in ('current.json', *HISTORY_FILES.values())})
+except (OSError, ValueError, TypeError, KeyError) as error:
+    raise SystemExit(f'Could not copy a consistent pilot feed ({error}). Run bin/pi snapshot again.') from error
 shutil.copytree(snapshot, 'dist/canones/data/pilot', dirs_exist_ok=True)
 p = Path('dist/canones/assets/site-config.json')
 config = json.loads(p.read_text())

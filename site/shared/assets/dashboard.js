@@ -53,7 +53,6 @@ const state = {
   metric: "temperature",
   period: "day",
   units: "us",
-  current: null,
   history: {},
   viewport: null,
   showStation: true,
@@ -67,7 +66,7 @@ function historyEnd() {
   return state.mode === "sample" ? Date.parse(settings.sample_observed_at) : Date.now();
 }
 function chartCadence(end = historyEnd()) {
-  const recentThrough = Math.max(state.current?.observedAt ?? -Infinity, state.history.recent?.data?.throughTime ?? -Infinity);
+  const recentThrough = Math.max(currentFeed.data?.observedAt ?? -Infinity, state.history.recent?.data?.throughTime ?? -Infinity);
   if (state.period === "day" && !state.viewport && recentThrough === -Infinity) return "recent";
   return historyCadence(periodDays[state.period], state.viewport, end, recentThrough);
 }
@@ -261,13 +260,15 @@ function validReference(data, key, cadence) {
   return {...data, [cadence]: rows};
 }
 function matchesCurrentDataset(history) {
-  const currentDataset = state.current?.deployment?.dataset_id;
+  const currentDataset = currentFeed.data?.deployment?.dataset_id;
   return !currentDataset || history.deployment?.dataset_id === currentDataset;
 }
-async function refreshFeed(entry, url, validate) {
+async function refreshFeed(entry, url, validate, {maxAge = -Infinity, retryFailed = false} = {}) {
+  const now = Date.now();
+  if (entry.loading || (now - entry.checkedAt < maxAge && !(retryFailed && entry.failed))) return false;
   const {data, failed} = entry;
   entry.loading = true;
-  entry.checkedAt = Date.now();
+  entry.checkedAt = now;
   try {
     const response = await fetch(url, {signal: AbortSignal.timeout(15000), cache: "no-cache"});
     if (!response.ok) throw new Error(`Feed returned HTTP ${response.status}.`);
@@ -301,7 +302,7 @@ function renderPeriodSelection() {
     : "Custom history window";
 }
 function renderCurrent() {
-  const data = state.current;
+  const data = currentFeed.data;
   const observation = data?.outdoor ?? {};
   $("pilot-notice").hidden =
     state.mode === "sample" ||
@@ -356,12 +357,12 @@ function renderStatus() {
     status.textContent = "Sample data";
     return;
   }
-  if (!state.current) {
+  if (!currentFeed.data) {
     status.classList.add("error");
     status.textContent = currentFeed.loading ? "Connecting" : "Unavailable";
     return;
   }
-  const age = (Date.now() - state.current.observedAt) / 60000;
+  const age = (Date.now() - currentFeed.data.observedAt) / 60000;
   const stale = age > settings.stale_after_minutes;
   const clockError = age < -5;
   status.classList.add(stale || clockError ? "stale" : "fresh");
@@ -414,7 +415,8 @@ function renderChart() {
   const daily = !seasonal && cadence === "daily";
   const recent = cadence === "recent";
   const historyFeed = state.showStation && state.history[cadence];
-  const history = historyFeed?.data;
+  const loadedHistory = historyFeed?.data;
+  const history = loadedHistory && matchesCurrentDataset(loadedHistory) ? loadedHistory : null;
   const resolution = seasonal ? (state.period === "monsoon" ? "Monsoon" : "Seasonal")
     : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
   let rows = groupedRows(rowsThrough(history?.rows, end), seasonal);
@@ -492,7 +494,7 @@ function renderChart() {
     ? `${endpoints[0].label} – ${endpoints.at(-1).label}`
     : `Available ${dateFormat.format(endpoints[0].at)} – ${dateFormat.format(endpoints.at(-1).at)}`;
   const stationStatus = historyFeed?.failed ? (history ? "Station refresh failed" : "Station history unavailable")
-    : recent && history && state.current && history.throughTime !== state.current.observedAt
+    : recent && history && currentFeed.data && history.throughTime !== currentFeed.data.observedAt
       ? "Station history and current observations updated at different times" : "";
   $("history-range").textContent = [range, stationStatus].filter(Boolean).join(" · ");
   const referenceHasData = comparisons.some((item) => item.rows.some(hasReferenceValue));
@@ -582,7 +584,7 @@ function renderChart() {
   if (comparisons.length && stationHasData && !seasonal && numeric(history?.recordStartedAt)) {
     series[0].markLine = {
       symbol: "none", lineStyle: {color: stationStyle.color, type: "dashed"},
-      data: [{xAxis: history.recordStartedAt, name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && state.current?.outdoor?.verified ? "Verified WS90 begins" : "Local pilot begins"}],
+      data: [{xAxis: history.recordStartedAt, name: state.mode === "sample" ? "Sample station begins" : history.deployment?.phase === "production" && currentFeed.data?.outdoor.verified ? "Verified WS90 begins" : "Local pilot begins"}],
       label: {formatter: "{b}", color: stationStyle.color, position: "insideEndTop"},
     };
   }
@@ -753,7 +755,6 @@ function renderChart() {
 function loadMode() {
   const source = stationFeed();
   currentFeed = {};
-  state.current = null;
   state.history = {};
   $("json-link").hidden = !source;
   selected("mode", state.mode);
@@ -773,29 +774,21 @@ async function loadCurrent() {
   const entry = currentFeed;
   const source = stationFeed();
   if (!source || entry.loading) return;
+  const previous = entry.data;
   await refreshFeed(entry, new URL("current.json", source), validCurrent);
   if (entry !== currentFeed) return;
-  const previous = state.current;
-  state.current = entry.data ?? null;
   if (previous && !matchesCurrentDataset(previous)) state.history = {};
   for (const [cadence, cached] of Object.entries(state.history))
     if (cached.data && !matchesCurrentDataset(cached.data)) delete state.history[cadence];
-  if (state.mode === "live") {
-    if (entry.failed)
-      notice(
-        state.current
-          ? "The latest refresh failed. Showing the last observation with its original timestamp."
-          : "The live observation feed is unavailable. Please try again later.",
-        true,
-      );
-    else
-      notice(
-        state.current.outdoor.verified
-          ? "Station observations · timestamps and sensor provenance are included in the public JSON feed."
-          : "Sensor mapping is unverified. Primary temperature and humidity may come from an auxiliary sensor.",
-      );
-  } else if (entry.failed)
-    notice("Sample current observations could not be loaded.", true);
+  if (entry.failed) {
+    notice(state.mode === "sample" ? "Sample current observations could not be loaded."
+      : entry.data ? "The latest refresh failed. Showing the last observation with its original timestamp."
+        : "The live observation feed is unavailable. Please try again later.", true);
+  } else if (state.mode === "live") {
+    notice(entry.data.outdoor.verified
+      ? "Station observations · timestamps and sensor provenance are included in the public JSON feed."
+      : "Sensor mapping is unverified. Primary temperature and humidity may come from an auxiliary sensor.");
+  }
   renderCurrent();
   renderChart();
 }
@@ -803,9 +796,8 @@ async function loadHistory(cadence) {
   const source = stationFeed();
   if (!source || !state.showStation) return;
   const entry = state.history[cadence] ??= {};
-  const fresh = entry.checkedAt !== undefined && (state.mode === "sample" || Date.now() - entry.checkedAt < archiveStep);
-  if (entry.loading || fresh) return;
-  const changed = await refreshFeed(entry, new URL(`history/${cadence}.json`, source), (data) => validHistory(data, cadence));
+  const maxAge = state.mode === "sample" ? Infinity : archiveStep;
+  const changed = await refreshFeed(entry, new URL(`history/${cadence}.json`, source), (data) => validHistory(data, cadence), {maxAge});
   if (changed && entry === state.history[cadence] && cadence === chartCadence() && state.showStation) renderChart();
 }
 for (const group of ["metric", "period", "units", "mode"]) {
@@ -820,22 +812,17 @@ for (const group of ["metric", "period", "units", "mode"]) {
         state.metric = "rain";
         selected("metric", state.metric);
       }
+      if (group === "mode") return loadMode();
       selected(group, state[group]);
-      if (group === "mode") loadMode();
-      else {
-        if (group === "units") renderCurrent();
-        renderChart();
-      }
+      if (group === "units") renderCurrent();
+      renderChart();
     });
 }
-async function loadReference(source, cadence, {maxAge = Infinity, retryFailed = false} = {}) {
+async function loadReference(source, cadence, options = {maxAge: Infinity}) {
   const entry = source.feeds[cadence] ??= {};
-  const now = Date.now();
-  const fresh = now - entry.checkedAt < maxAge;
-  if (entry.loading || (fresh && !(retryFailed && entry.failed))) return;
   const {key} = source;
   const path = cadence === "hourly" ? `hourly/${key}.json` : `${key}.json`;
-  const changed = await refreshFeed(entry, new URL(path, settings.reference_feed), (data) => validReference(data, key, cadence));
+  const changed = await refreshFeed(entry, new URL(path, settings.reference_feed), (data) => validReference(data, key, cadence), options);
   if (changed && source.selected && cadence === chartCadence() && supportsMetric(source, cadence)) renderChart();
 }
 stationInput.addEventListener("change", (event) => {

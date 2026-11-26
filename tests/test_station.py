@@ -21,10 +21,17 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_station_pages_waits_for_history_from_current_dataset(monkeypatch):
     monkeypatch.setenv("CF_PAGES", "1")
     monkeypatch.setenv("CF_PAGES_BRANCH", "main")
-    live = {"kind": "live", "schema_version": 1, "deployment": {"dataset_id": "pilot-check"}}
-    payloads = {"current.json": {**live, "station": {"id": "canones"}}}
-    for cadence in ("recent", "hourly"):
-        payloads[f"history/{cadence}.json"] = {**live, "station_id": "canones", "cadence": cadence, "rows": []}
+    live = {
+        "kind": "live",
+        "schema_version": 1,
+        "deployment": {"phase": "pilot", "dataset_id": "pilot-check", "notice": "Pilot"},
+    }
+    timestamp = "2026-11-25T20:25:00Z"
+    payloads = {
+        "current.json": {**live, "station": {"id": "canones"}, "observed_at": timestamp, "outdoor": {"verified": False}}
+    }
+    history = {**live, "station_id": "canones", "through": timestamp, "record_started_at": timestamp, "rows": []}
+    payloads.update({f"history/{cadence}.json": {**history, "cadence": cadence} for cadence in ("recent", "hourly")})
 
     def fetch(request, *, timeout):
         name = request.full_url.split("/canones/", 1)[1]
@@ -38,7 +45,7 @@ def test_station_pages_waits_for_history_from_current_dataset(monkeypatch):
     monkeypatch.setenv("CF_PAGES_URL", "https://build.canones-weather.pages.dev")
     with pytest.raises(SystemExit, match=r"history/daily\.json"):
         check_pages_history(ROOT)
-    daily = {**live, "station_id": "canones", "cadence": "daily", "rows": []}
+    daily = {**history, "cadence": "daily"}
     payloads["history/daily.json"] = {**daily, "deployment": {"dataset_id": "different"}}
     with pytest.raises(SystemExit, match="does not match.*dataset"):
         check_pages_history(ROOT)
