@@ -68,6 +68,9 @@ function historyEnd() {
 function chartCadence(end = historyEnd()) {
   return historyCadence(periodDays[state.period], state.viewport, end, state.history?.recent?.at(-1)?.at);
 }
+function supportsMetric(source, cadence) {
+  return source[cadence]?.includes(state.metric) ?? false;
+}
 let requestId = 0;
 let timelineDomain = null;
 let renderWindow;
@@ -165,6 +168,9 @@ const metrics = {
   wind: {label: "Average wind speed", field: "wind_speed_m_s", convert: speed},
   rain: {label: "Precipitation", field: "rain_mm", convert: rain},
   solar: {label: "Solar irradiance", field: "solar_w_m2"},
+};
+const partialBarStyle = {
+  decal: {symbol: "rect", dashArrayX: [1, 0], dashArrayY: [2, 3], rotation: Math.PI / 4, color: "rgba(0, 0, 0, .55)"},
 };
 
 function validEnvelope(data) {
@@ -366,7 +372,8 @@ function renderChart() {
   const daily = !seasonal && cadence === "daily";
   const recent = cadence === "recent";
   const history = state.history;
-  const resolution = seasonal ? "Seasonal" : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
+  const resolution = seasonal ? (state.period === "monsoon" ? "Monsoon" : "Seasonal")
+    : daily ? "Daily" : recent ? "Five-minute" : "Hourly";
   const rowsThrough = (data, cutoff) => {
     const rows = data?.[cadence] ?? [];
     return rows.at(-1)?.at > cutoff ? rows.filter((row) => row.at <= cutoff) : rows;
@@ -380,49 +387,50 @@ function renderChart() {
     : `${stationName} hidden · Mountain Time`;
   $("history-resolution").textContent = recent ? "Five-minute observations" : `${resolution} summaries`;
   const activeSources = [];
-  const supportsMetric = (source) => source[cadence]?.includes(state.metric) ?? false;
-  const hasEligibleSource = references.some(supportsMetric);
+  const hasEligibleSource = references.some((source) => supportsMetric(source, cadence));
   $("reference-sources").disabled = !hasEligibleSource;
   for (const source of references) {
     const {input, status} = source;
-    const eligible = supportsMetric(source);
+    const eligible = supportsMetric(source, cadence);
+    const active = eligible && source.selected;
     input.disabled = !eligible;
-    input.checked = eligible && source.selected;
+    input.checked = active;
     status.hidden = !hasEligibleSource || eligible;
     status.textContent = cadence === "hourly" && source.daily.includes(state.metric) ? "Daily only" : "No data";
     if (status.hidden) input.removeAttribute("aria-describedby");
     else input.setAttribute("aria-describedby", status.id);
-    if (input.checked) {
+    if (active) {
       activeSources.push(source);
       loadReference(source, cadence);
     }
   }
   const showReferences = activeSources.length > 0;
-  const loadedSources = activeSources.filter(({feeds}) => feeds[cadence]?.data);
   const measurementFields = state.metric === "temperature" && !recent ? [
     ["temperature_max_c", seasonal ? "avg high" : "high"],
     ["temperature_min_c", seasonal ? "avg low" : "low"],
   ] : [[field, seasonal && state.metric === "rain" ? "total precipitation" : label.toLowerCase()]];
   const hasReferenceValue = (row) => measurementFields.some(([key]) => numeric(row[key]));
   // A reference hour must be complete at the live or sample cutoff.
-  const cutoff = cadence === "hourly" ? end - HOUR : end;
-  const comparisons = loadedSources.flatMap((source) => {
-    const rows = rowsThrough(source.feeds[cadence].data, cutoff);
-    return rows.some(hasReferenceValue) ? [{source, rows: groupRows(rows)}] : [];
+  const hourly = cadence === "hourly";
+  const referenceInterval = hourly ? HOUR : 0;
+  const selectedReferences = activeSources.map((source) => {
+    const {data, failed, loading} = source.feeds[cadence];
+    const rows = rowsThrough(data, end - referenceInterval);
+    return {source, rows, last: rows.findLast(hasReferenceValue), loaded: Boolean(data), failed, loading};
   });
+  const comparisons = selectedReferences.flatMap(({source, rows, last}) => last ? [{source, rows: groupRows(rows)}] : []);
   const dailyAvailable = references.some((source) => source.daily.includes(state.metric));
   const controlNote = recent ? "Choose 7d or 30d to compare references."
     : !hasEligibleSource
     ? cadence === "hourly" && dailyAvailable ? "Choose 30d to compare this measurement in daily summaries."
       : "No references report the selected metric."
     : !showReferences ? "Select sources to compare regional weather."
-    : activeSources.map(({name, feeds}) => {
-      const {data, failed} = feeds[cadence];
-      if (!data) return failed ? `${name} could not be loaded. Reselect to retry.` : `Loading ${name}…`;
-      const last = data[cadence].findLast(hasReferenceValue);
-      const hourly = cadence === "hourly";
-      const lag = last && hourly && state.mode === "live" && end - (last.at + HOUR) > hourlyDelay;
-      const coverage = last ? `through ${hourly ? timeFormat.format(last.at + HOUR) : dateFormat.format(last.at)}`
+    : selectedReferences.map(({source: {name}, last, loaded, failed, loading}) => {
+      if (!loaded) return loading ? `Loading ${name}…` : `${name} could not be loaded. Reselect to retry.`;
+      const coverageEnd = last && last.at + referenceInterval;
+      const lag = last && hourly && state.mode === "live" && end - coverageEnd > hourlyDelay;
+      const coverage = last ? `through ${(hourly ? timeFormat : dateFormat).format(coverageEnd)}`
+        : state.mode === "sample" ? "no values for this measurement before the sample ends"
         : "no values for this measurement";
       return [name, coverage, lag ? "delayed" : "", failed ? "refresh failed" : ""].filter(Boolean).join(" · ");
     }).join(" | ");
@@ -457,7 +465,7 @@ function renderChart() {
       ? `${stationName} + reference history · Mountain Time`
       : `Reference history only · ${state.showStation ? `${stationName} has no readings in this window` : `${stationName} hidden`} · Mountain Time`;
     if ($("history-subtitle").textContent !== subtitle) $("history-subtitle").textContent = subtitle;
-    const status = controlNote + (loadedSources.length && !referenceInWindow
+    const status = controlNote + (comparisons.length && !referenceInWindow
       ? " · No reference observations in this window" : "");
     if ($("control-note").textContent !== status) $("control-note").textContent = status;
     return stationInWindow || referenceInWindow;
@@ -466,11 +474,12 @@ function renderChart() {
   $("timeline-controls").hidden = seasonal || (!stationHasData && !referenceHasData);
   if (!stationHasData && !referenceHasData) {
     describeCoverage();
+    const loading = state.loading || selectedReferences.some((reference) => reference.loading);
     const selectionPrompt = hasEligibleSource
       ? "Choose observations or\nreference history to display." : `Show ${stationName} to display history.`;
     const emptyMessage = !state.showStation && !showReferences ? selectionPrompt
-      : state.loading ? "Loading history…"
-      : state.metric === "solar" ? "No solar observations in this period." : seasonal ? "Seasonal comparisons need daily history." : "No observations in this period.";
+      : loading ? "Loading history…"
+      : `No ${label.toLowerCase()} observations in this period.`;
     timelineDomain = null;
     chart.setOption({
       title: {
@@ -497,6 +506,8 @@ function renderChart() {
     let hasIsolatedPoints = false;
     const data = dataRows.map((row, index) => {
       const value = [seasonal ? index : row.at, convert(row[key])];
+      if (!line && seasonal && numeric(value[1]) && row.coverage[key] < row.expectedDays)
+        return {value, itemStyle: partialBarStyle};
       if (line && !seasonal && numeric(value[1]) &&
           !numeric(dataRows[index - 1]?.[key]) && !numeric(dataRows[index + 1]?.[key])) {
         hasIsolatedPoints = true;
@@ -585,8 +596,8 @@ function renderChart() {
       },
       tooltip: {
         trigger: "axis",
-        confine: seasonal,
-        extraCssText: seasonal ? "max-width:100%;white-space:normal" : "",
+        confine: true,
+        extraCssText: "max-width:100%;white-space:normal",
         backgroundColor: "#22302e",
         borderColor: "#43534a",
         textStyle: { color: "#e8ebe4" },
@@ -678,7 +689,7 @@ function renderChart() {
   );
   const notes = [];
   if (seasonal && state.metric === "temperature") notes.push("Highs and lows are averages of the reported daily highs and lows.");
-  if (seasonal && state.metric === "rain") notes.push("Precipitation totals use reported days.");
+  if (seasonal && state.metric === "rain") notes.push("Striped bars show precipitation totals for periods with incomplete data coverage.");
   if (seasonal) notes.push("Data coverage counts days with a reported value, including zero, out of the full period.");
   if (state.metric === "rain" && referenceHasData)
     notes.push("Reference precipitation can include melted snow.");
@@ -809,7 +820,7 @@ async function loadReference(source, cadence, {maxAge = Infinity, retryFailed = 
     entry.failed = true;
   }
   entry.loading = false;
-  if (source.selected && cadence === chartCadence()) renderChart();
+  if (source.selected && cadence === chartCadence() && supportsMetric(source, cadence)) renderChart();
 }
 stationInput.addEventListener("change", (event) => {
   state.showStation = event.target.checked;
@@ -837,7 +848,7 @@ setInterval(() => {
   const maxAge = referenceRefresh[cadence];
   if (!maxAge) return;
   for (const source of references)
-    if (source.input.checked && !source.input.matches(":disabled"))
+    if (source.selected && supportsMetric(source, cadence))
       loadReference(source, cadence, {maxAge});
 }, 300000);
 await load();

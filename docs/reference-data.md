@@ -83,9 +83,10 @@ precipitation remains a flagged zero and is identified in daily tooltips.
 Multiday precipitation is not divided into invented daily totals.
 
 Missing dates stay visible and reduce data coverage.
-Seasonal and monsoon values are calculated separately for each
-source; missing days are never counted as dry or extrapolated into a complete
-season. Totals from different observation windows need not be directly comparable.
+Seasonal and monsoon values are calculated separately for each source. Striped
+precipitation bars indicate totals from only part of the period. Missing days are
+never counted as dry or extrapolated into a complete season.
+Totals from different observation windows need not be directly comparable.
 
 Chart legends and tooltips identify each reference source.
 Time-series overlays mark the local archive's `record_started_at`, identifying
