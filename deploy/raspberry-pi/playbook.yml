@@ -58,24 +58,31 @@
         - pyproject.toml
         - uv.lock
       notify: Restart weather pilot
-    - name: Copy application source
+    - name: Copy collector modules and station metadata
       ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "{{ weather_install_root }}/src/canones_weather/{{ item | basename }}"
+        src: "../../src/canones_weather/{{ item }}"
+        dest: "{{ weather_install_root }}/src/canones_weather/{{ item }}"
         owner: root
         group: root
         mode: '0644'
-      with_fileglob:
-        - "{{ playbook_dir }}/../../src/canones_weather/*.py"
+      loop:
+        - __init__.py
+        - export.py
+        - jsonio.py
+        - station.py
+        - station.json
       notify: Restart weather pilot
-    - name: Copy shared station metadata
+    - name: Copy diagnostic, publishing, and recovery commands
       ansible.builtin.copy:
-        src: ../../src/canones_weather/station.json
-        dest: "{{ weather_install_root }}/src/canones_weather/station.json"
+        src: "../../src/canones_weather/{{ item }}"
+        dest: "{{ weather_install_root }}/src/canones_weather/{{ item }}"
         owner: root
         group: root
         mode: '0644'
-      notify: Restart weather pilot
+      loop:
+        - probe.py
+        - publish.py
+        - recover.py
     - name: Remove copied bytecode caches
       ansible.builtin.file:
         path: "{{ weather_install_root }}/src/canones_weather/__pycache__"
