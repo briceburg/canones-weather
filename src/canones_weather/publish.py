@@ -5,7 +5,6 @@ import fcntl
 import json
 import logging
 import os
-from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -14,10 +13,9 @@ import boto3
 from botocore.config import Config
 
 from canones_weather.jsonio import write_json
-from canones_weather.station import load_station
+from canones_weather.station import HISTORY_FILES, validate_live_feed
 
 log = logging.getLogger(__name__)
-CADENCES = ("daily", "hourly", "recent")
 
 
 def publishing_client(config):
@@ -36,54 +34,6 @@ def publishing_client(config):
     )
 
 
-def instant(value):
-    try:
-        parsed = datetime.fromisoformat(value)
-        if parsed.tzinfo is not None:
-            return parsed
-    except (TypeError, ValueError):
-        pass
-    raise ValueError("Publisher timestamps must include a time zone")
-
-
-def validate_payloads(payloads):
-    documents = {name: json.loads(body) for name, body in payloads.items()}
-    if any(document.get("kind") != "live" or document.get("schema_version") != 1 for document in documents.values()):
-        raise ValueError("Only version-1 measured observations can be published")
-    current = documents["current.json"]
-    recent = documents["history/recent.json"]
-    observed_at = instant(current.get("observed_at"))
-    record_started_at = instant(recent.get("record_started_at"))
-    if observed_at != instant(recent.get("through")) or record_started_at > observed_at:
-        raise ValueError("Current and recent history must describe the same observation interval")
-    deployment = current.get("deployment", {})
-    station_id = load_station()["id"]
-    if current.get("station", {}).get("id") != station_id:
-        raise ValueError("Publisher station identity does not match")
-    for cadence in CADENCES:
-        tier = documents[f"history/{cadence}.json"]
-        if tier.get("station_id") != station_id:
-            raise ValueError("Publisher station identity does not match")
-        if not deployment.get("dataset_id") or deployment != tier.get("deployment"):
-            raise ValueError("Current and history must belong to the same deployment dataset")
-        if tier.get("cadence") != cadence or not isinstance(tier.get("rows"), list):
-            raise ValueError("History payload does not match its cadence")
-        if instant(tier.get("record_started_at")) != record_started_at:
-            raise ValueError("History payloads must describe the same archive start")
-        through = instant(tier.get("through"))
-        if through > observed_at or (tier["rows"] and through < record_started_at):
-            raise ValueError("History coverage does not match the observation interval")
-    if deployment.get("phase") == "pilot":
-        if not deployment.get("notice") or current.get("outdoor", {}).get("verified") is not False:
-            raise ValueError("Pilot observations need a notice and unverified provenance")
-    elif deployment.get("phase") == "production":
-        if current.get("outdoor", {}).get("verified") is not True:
-            raise ValueError("Production observations require verified provenance")
-    else:
-        raise ValueError("Unknown deployment phase")
-    return deployment
-
-
 def publish(config, *, state_dir):
     root = Path(config["source_root"])
     state_dir = Path(state_dir)
@@ -95,10 +45,9 @@ def publish(config, *, state_dir):
         fcntl.flock(lock, fcntl.LOCK_EX)
         # The collector commits current last. Read it first, then reject a newer recent tier.
         current = (root / "current.json").read_bytes()
-        paths = [f"history/{cadence}.json" for cadence in CADENCES]
-        payloads = {name: (root / name).read_bytes() for name in paths}
+        payloads = {name: (root / name).read_bytes() for name in HISTORY_FILES.values()}
         payloads["current.json"] = current
-        deployment = validate_payloads(payloads)
+        deployment = validate_live_feed({name: json.loads(body) for name, body in payloads.items()})
         try:
             receipts = json.loads(receipt.read_bytes())
         except (FileNotFoundError, ValueError):

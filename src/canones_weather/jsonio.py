@@ -6,9 +6,15 @@ import tempfile
 from pathlib import Path
 
 
-def write_json(path, data):
+def write_json(path, data, *, if_changed=False):
     path = Path(path)
     body = (json.dumps(data, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    if if_changed:
+        try:
+            if path.read_bytes() == body:
+                return body
+        except FileNotFoundError:
+            pass
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

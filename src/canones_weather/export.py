@@ -1,9 +1,7 @@
 """Export WeeWX archive observations and summaries to the dashboard JSON format."""
 
-import json
 import logging
 import math
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,17 +13,17 @@ import weewx.xtypes
 from weeutil.weeutil import TimeSpan, archiveDaySpan, intervalgen, startOfDay
 
 from canones_weather.jsonio import write_json
-from canones_weather.station import load_station
+from canones_weather.station import HISTORY_FILES, load_station
 
 log = logging.getLogger(__name__)
 
 
-@dataclass
 class ExportCache:
     """Cache closed history for one collector connection and export directory."""
 
-    revision: tuple | None = None
-    summaries: dict = field(default_factory=dict)
+    def __init__(self):
+        self.revision = None
+        self.summaries = {}
 
 
 def iso(timestamp):
@@ -55,9 +53,9 @@ def history_rows(manager, start, stop, interval):
             ("temperature_min_c", "outTemp", "min", "degree_C"),
             ("temperature_max_c", "outTemp", "max", "degree_C"),
         ]
-    for key, observation, aggregate, unit in fields:
+    for field, observation, aggregate, unit in fields:
         for row in rows.values():
-            row[key] = None
+            row[field] = None
         if recent:
             _, ends, values = weewx.xtypes.get_series(observation, TimeSpan(start, stop), manager)
             samples = ((stamp, (value, values[1], values[2])) for stamp, value in zip(ends[0], values[0]))
@@ -70,17 +68,8 @@ def history_rows(manager, start, stop, interval):
             )
         for timestamp, value in samples:
             if timestamp in rows and value[0] is not None:
-                rows[timestamp][key] = number(weewx.units.convert(value, unit)[0])
+                rows[timestamp][field] = number(weewx.units.convert(value, unit)[0])
     return list(rows.values())
-
-
-def write_changed_json(path, data):
-    try:
-        if json.loads(path.read_bytes()) == data:
-            return
-    except (FileNotFoundError, ValueError):
-        pass
-    write_json(path, data)
 
 
 def export(manager, record, output_root, *, cache=None):
@@ -97,10 +86,10 @@ def export(manager, record, output_root, *, cache=None):
                 previous = cache.summaries
         current, history = documents(manager, record, previous)
     for cadence, data in history.items():
-        path = root / "history" / f"{cadence}.json"
+        path = root / HISTORY_FILES[cadence]
         if data is not previous.get(cadence) or not path.is_file():
-            write_changed_json(path, data)
-    write_changed_json(root / "current.json", current)
+            write_json(path, data, if_changed=True)
+    write_json(root / "current.json", current, if_changed=True)
     if revision is not None:
         cache.revision = revision
         cache.summaries = {cadence: history[cadence] for cadence in ("daily", "hourly")}
@@ -122,13 +111,8 @@ def documents(manager, record, previous=None):
             "from the garage WN32. Sensor mapping is unverified; Wunderground/CWOP publishing is disabled."
         ),
     }
-    archive = {
-        "deployment": deployment,
-        "schema_version": 1,
-        "kind": "live",
-        "station_id": station["id"],
-        "record_started_at": iso(first),
-    }
+    envelope = {"deployment": deployment, "schema_version": 1, "kind": "live"}
+    archive = {**envelope, "station_id": station["id"], "record_started_at": iso(first)}
     spans = {
         "daily": (start, day_start, "day"),
         "hourly": (max(int((first - 1) // 3600) * 3600, hourly_stop - 30 * 86400), hourly_stop, 3600),
@@ -159,9 +143,7 @@ def documents(manager, record, previous=None):
             rain_today = weewx.units.convert(aggregate, "mm")[0]
             rain_source = "complete_archive"
     current = {
-        "deployment": deployment,
-        "schema_version": 1,
-        "kind": "live",
+        **envelope,
         "station": station,
         "observed_at": iso(timestamp),
         "outdoor": {

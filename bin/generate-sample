@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from canones_weather.station import load_station  # noqa: E402
+from canones_weather.station import HISTORY_FILES, load_station  # noqa: E402
 
 STATION = load_station()
 ZONE = ZoneInfo(STATION["timezone"])
@@ -100,9 +100,9 @@ def main():
                 hourly.append(summary(observations, hour))
         current_day += timedelta(days=1)
     latest = recent[-1]
+    envelope = {"schema_version": 1, "kind": "sample"}
     current = {
-        "schema_version": 1,
-        "kind": "sample",
+        **envelope,
         "station": STATION,
         "observed_at": iso(stop),
         "outdoor": {
@@ -117,17 +117,15 @@ def main():
         },
     }
     history = {
-        "schema_version": 1,
-        "kind": "sample",
+        **envelope,
         "station_id": STATION["id"],
         "record_started_at": iso(datetime.combine(START, time(), ZONE).timestamp() + 300),
     }
     root = Path(__file__).resolve().parent.parent / "site/canones/data/sample"
-    (root / "history").mkdir(exist_ok=True)
     midnight = datetime.combine(THROUGH.astimezone(ZONE).date(), time(), ZONE).timestamp()
-    documents = [("current", current)]
+    documents = [("current.json", current)]
     documents.extend(
-        (f"history/{cadence}", {**history, "cadence": cadence, "through": iso(through), "rows": rows})
+        (HISTORY_FILES[cadence], {**history, "cadence": cadence, "through": iso(through), "rows": rows})
         for cadence, through, rows in (
             ("recent", stop, recent),
             ("hourly", stop // 3600 * 3600, hourly),
@@ -136,13 +134,11 @@ def main():
     )
     for name, data in documents:
         # Round only serialized values; summaries use unrounded inputs.
-        text = json.dumps(data, separators=(",", ":"), allow_nan=False)
-        document = json.loads(text, parse_float=lambda value: round(float(value), 4))
-        (root / f"{name}.json").write_text(
-            json.dumps(document, indent=2, allow_nan=False) + "\n"
-            if name == "current"
-            else json.dumps(document, separators=(",", ":"), allow_nan=False) + "\n"
-        )
+        document = json.loads(json.dumps(data, allow_nan=False), parse_float=lambda value: round(float(value), 4))
+        options = {"indent": 2} if name == "current.json" else {"separators": (",", ":")}
+        path = root / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps(document, allow_nan=False, **options) + "\n")
     print(f"Synthetic sample through {iso(stop)}: {len(recent)} recent, {len(hourly)} hourly, {len(daily)} daily rows")
 
 

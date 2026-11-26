@@ -9,7 +9,7 @@ from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from canones_weather.reference import HOURLY_METRICS, STATIONS, USCRN_STATIONS
-from canones_weather.station import load_station
+from canones_weather.station import HISTORY_FILES, load_station, validate_live_feed
 
 STATION_LOCATION = (36.150028, -106.4455)
 REFERENCE_GROUPS = {
@@ -106,31 +106,19 @@ def check_pages_history(repo_root):
 
     config = json.loads((repo_root / "site/shared/assets/site-config.json").read_text())
     feed = config["environments"]["prod"]["data"]
-    station_id = load_station()["id"]
-    dataset = None
-    for cadence in (None, "recent", "hourly", "daily"):
-        path = f"history/{cadence}.json" if cadence else "current.json"
-        url = urljoin(feed, path)
-        try:
-            request = Request(url, headers={"User-Agent": "Canones Weather Pages", "Cache-Control": "no-cache"})
+    documents = {}
+    try:
+        for path in ("current.json", *HISTORY_FILES.values()):
+            request = Request(
+                urljoin(feed, path), headers={"User-Agent": "Canones Weather Pages", "Cache-Control": "no-cache"}
+            )
             with urlopen(request, timeout=10) as response:
-                data = json.load(response)
-            dataset_id = data["deployment"]["dataset_id"]
-            if data["schema_version"] != 1 or data["kind"] != "live" or not dataset_id:
-                raise ValueError("expected live station data")
-            if cadence is None:
-                if data["station"]["id"] != station_id:
-                    raise ValueError("wrong station")
-                dataset = dataset_id
-            elif (
-                data["station_id"] != station_id
-                or dataset_id != dataset
-                or data["cadence"] != cadence
-                or not isinstance(data["rows"], list)
-            ):
-                raise ValueError("snapshot does not match the station, dataset, or cadence")
-        except (OSError, ValueError, TypeError, KeyError) as error:
-            raise SystemExit(f"Publish {url} then retry the station Pages build ({error}).") from error
+                documents[path] = json.load(response)
+        # Public reads may span multiple uploads of the same live dataset.
+        validate_live_feed(documents, check_watermarks=False)
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        url = getattr(error, "url", feed)
+        raise SystemExit(f"Publish the station snapshots at {url} then retry the Pages build ({error}).") from error
 
 
 def build_site(repo_root, output_root):
@@ -143,17 +131,32 @@ def build_site(repo_root, output_root):
         shutil.copytree(source, target)
         shutil.copytree(repo_root / "site/shared/assets", target / "assets")
         shutil.copyfile(repo_root / "site/shared/_headers", target / "_headers")
+        config_path = target / "assets/site-config.json"
+        config = json.loads(config_path.read_text())
+        config["station"] = station
         page = target / "index.html"
         html = render_html(page.read_text(encoding="utf-8"), station)
         if name == "canones":
             local_source = source_option(station["id"], station["name"], "NM", STATION_MAP_URL, "#e4b17b")
             html = html.replace("{{ station_option }}", local_source)
             html = html.replace("{{ reference_groups }}", reference_groups())
-        page.write_text(html, encoding="utf-8")
-        config_path = target / "assets/site-config.json"
-        config = json.loads(config_path.read_text())
-        config["station"] = station
-        if name == "canones":
+            feed = config["environments"]["prod"]["data"]
+            downloads = [
+                {
+                    "@type": "DataDownload",
+                    "name": label,
+                    "encodingFormat": "application/json",
+                    "contentUrl": urljoin(feed, path),
+                }
+                for path, label in (
+                    ("current.json", "Current local observations"),
+                    (HISTORY_FILES["recent"], "Five-minute local observations"),
+                    (HISTORY_FILES["hourly"], "Hourly local summaries"),
+                    (HISTORY_FILES["daily"], "Daily local summaries"),
+                )
+            ]
+            html = html.replace("{{ observation_downloads }}", json.dumps(downloads).replace("<", r"\u003c"))
+            html = html.replace("{{ daily_history_url }}", escape(urljoin(feed, HISTORY_FILES["daily"])))
             sample_path = target / "data/sample/current.json"
             sample = json.loads(sample_path.read_text())
             if any(sample["station"][key] != station[key] for key in ("id", "timezone")):
@@ -161,4 +164,5 @@ def build_site(repo_root, output_root):
             config["sample_observed_at"] = sample["observed_at"]
             sample["station"]["name"] = station["name"]
             sample_path.write_text(json.dumps(sample, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        page.write_text(html, encoding="utf-8")
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
